@@ -1,0 +1,44 @@
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*/jotnar
+
+# Go
+/server/vendor/
+
+# Android
+/apps/android/.gradle/
+/apps/android/build/
+/apps/android/app/build/
+/apps/android/local.properties
+*.apk
+*.aab
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+/data/
+
+# Environment
+.env
+.env.*
+
+# Keys and secrets
+*.pem
+*.key
+*.keystore
+*.jks
