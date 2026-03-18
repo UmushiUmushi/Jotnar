@@ -34,6 +34,9 @@
 -dontwarn okhttp3.**
 -dontwarn okio.**
 
+# Google Tink / ErrorProne (via androidx.security:security-crypto)
+-dontwarn com.google.errorprone.annotations.**
+
 # Room
 -keep class * extends androidx.room.RoomDatabase
 -keep @androidx.room.Entity class *
