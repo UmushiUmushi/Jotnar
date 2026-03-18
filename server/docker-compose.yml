@@ -6,7 +6,7 @@ services:
     volumes:
       - jotnar-data:/data
     environment:
-      - INFERENCE_HOST=http://sglang:8000
+      - INFERENCE_HOST=${INFERENCE_HOST:-http://sglang:8000}
       - INFERENCE_TIMEOUT_SEC=120
       - INFERENCE_MAX_RETRIES=3
       - JOTNAR_DB_PATH=/data/journal.db
