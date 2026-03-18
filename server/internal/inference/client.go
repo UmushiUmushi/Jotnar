@@ -16,6 +16,14 @@ type Client struct {
 	httpClient *http.Client
 	baseURL    string
 	maxRetries int
+	model      string
+}
+
+// modelsResponse is the OpenAI-compatible /v1/models response.
+type modelsResponse struct {
+	Data []struct {
+		ID string `json:"id"`
+	} `json:"data"`
 }
 
 // Message represents a chat completion message.
@@ -86,11 +94,34 @@ func NewClient(cfg ClientConfig) *Client {
 	if retries <= 0 {
 		retries = 3
 	}
-	return &Client{
+	c := &Client{
 		httpClient: &http.Client{Timeout: cfg.Timeout},
 		baseURL:    cfg.Host,
 		maxRetries: retries,
 	}
+	// Auto-detect model from the inference backend
+	c.model = c.detectModel()
+	return c
+}
+
+// detectModel queries /v1/models and returns the first available model ID.
+// Uses a short timeout so it doesn't block server startup.
+func (c *Client) detectModel() string {
+	client := &http.Client{Timeout: 5 * time.Second}
+	res, err := client.Get(c.baseURL + "/v1/models")
+	if err != nil {
+		return ""
+	}
+	defer res.Body.Close()
+
+	var models modelsResponse
+	if err := json.NewDecoder(res.Body).Decode(&models); err != nil {
+		return ""
+	}
+	if len(models.Data) > 0 {
+		return models.Data[0].ID
+	}
+	return ""
 }
 
 // isRetryable returns true for errors that are likely transient.
@@ -106,6 +137,9 @@ func isRetryable(statusCode int) bool {
 // Complete sends a chat completion request and returns the response text.
 // Retries transient failures with exponential backoff.
 func (c *Client) Complete(req ChatRequest) (string, error) {
+	if req.Model == "" && c.model != "" {
+		req.Model = c.model
+	}
 	body, err := json.Marshal(req)
 	if err != nil {
 		return "", fmt.Errorf("marshal request: %w", err)

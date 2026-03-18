@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/jotnar/server/internal/api"
 	"github.com/jotnar/server/internal/auth"
 	"github.com/jotnar/server/internal/config"
@@ -50,6 +51,9 @@ func cmdPairingCode() {
 }
 
 func main() {
+	// Load .env file if present (no error if missing)
+	_ = godotenv.Load()
+
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "pairingcode":
