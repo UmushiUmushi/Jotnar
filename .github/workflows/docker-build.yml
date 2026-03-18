@@ -7,7 +7,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/jotnar-server
 
 jobs:
   build:
@@ -18,6 +17,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set image name
+        id: image
+        run: echo "name=${OWNER,,}/jotnar-server" >> $GITHUB_OUTPUT
+        env:
+          OWNER: ${{ github.repository_owner }}
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -39,8 +44,8 @@ jobs:
           context: server
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}:latest
+            ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}:${{ steps.version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
@@ -53,7 +58,7 @@ jobs:
             ## Docker
 
             ```bash
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            docker pull ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}:${{ steps.version.outputs.version }}
             ```
 
             Or update an existing deployment:
