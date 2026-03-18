@@ -1,11 +1,13 @@
-## Jotnar server only — for use with a local inference backend (e.g. Ollama).
+## Jotnar server only — no bundled inference engine.
+## Use this when you're running your own OpenAI-compatible backend (e.g. Ollama, vLLM)
+## separately, outside of Docker Compose.
 ##
 ## Usage:
-##   docker compose -f docker-compose.local.yml up
+##   docker compose -f docker-compose.server-only.yml up
 ##
-## Set INFERENCE_HOST to wherever your OpenAI-compatible backend is running.
+## Set INFERENCE_HOST to wherever your inference backend is running.
 ## For Ollama on the host machine:
-##   INFERENCE_HOST=http://host.docker.internal:11434 docker compose -f docker-compose.local.yml up
+##   INFERENCE_HOST=http://host.docker.internal:11434 docker compose -f docker-compose.server-only.yml up
 
 services:
   jotnar:

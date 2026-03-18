@@ -144,7 +144,7 @@ All endpoints except `/auth/pair`, `/auth/recover`, and `/status` require a vali
 
 **Two deployment modes:**
 - `docker-compose.yml` — Full setup: Jotnar server + SGLang. Requires NVIDIA GPU with CUDA. Just `docker compose up`.
-- `docker-compose.local.yml` — Jotnar server only. For users running their own inference backend (e.g. Ollama natively). Set `INFERENCE_HOST` to point at it.
+- `docker-compose.server-only.yml` — Jotnar server only, no bundled inference engine. For users running their own OpenAI-compatible backend (e.g. Ollama, vLLM) separately. Set `INFERENCE_HOST` to point at it.
 
 **Capture is async**: The `/capture` and `/capture/batch` endpoints return 202 immediately after queuing. A background worker processes screenshots sequentially (or concurrently based on `INFERENCE_WORKERS`). This decouples upload speed from inference speed — the app never waits for the model.
 
