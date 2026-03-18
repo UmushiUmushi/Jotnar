@@ -21,8 +21,7 @@ data class EditEntryUiState(
     val metadata: List<MetadataResponse> = emptyList(),
     val editedNarrative: String = "",
     val toggleStates: Map<String, Boolean> = emptyMap(), // metadata id -> included
-    val previewNarrative: String? = null,
-    val isPreviewLoading: Boolean = false,
+    val isRegenerating: Boolean = false,
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
     val error: String? = null,
@@ -135,35 +134,44 @@ class EditEntryViewModel @Inject constructor(
         val includedIds = state.toggleStates.filter { it.value }.keys.toList()
 
         if (includedIds.size == state.metadata.size) {
-            // All included — preview is just the original
-            _uiState.update { it.copy(previewNarrative = null, isPreviewLoading = false) }
+            // All included — revert to original narrative
+            _uiState.update {
+                it.copy(
+                    editedNarrative = it.entry?.narrative ?: "",
+                    hasNarrativeChanges = false,
+                    isRegenerating = false
+                )
+            }
             return
         }
 
         if (includedIds.isEmpty()) {
-            _uiState.update { it.copy(previewNarrative = "", isPreviewLoading = false) }
+            _uiState.update {
+                it.copy(editedNarrative = "", hasNarrativeChanges = true, isRegenerating = false)
+            }
             return
         }
 
         previewJob = viewModelScope.launch {
-            _uiState.update { it.copy(isPreviewLoading = true) }
+            _uiState.update { it.copy(isRegenerating = true) }
             when (val result = metadataRepository.previewReconsolidation(entryId, includedIds)) {
                 is ApiResult.Success -> {
                     _uiState.update {
                         it.copy(
-                            previewNarrative = result.data.narrative,
-                            isPreviewLoading = false
+                            editedNarrative = result.data.narrative,
+                            hasNarrativeChanges = result.data.narrative != it.entry?.narrative,
+                            isRegenerating = false
                         )
                     }
                 }
                 is ApiResult.Error -> {
                     _uiState.update {
-                        it.copy(isPreviewLoading = false, error = "Preview failed: ${result.message}")
+                        it.copy(isRegenerating = false, error = "Preview failed: ${result.message}")
                     }
                 }
                 is ApiResult.NetworkError -> {
                     _uiState.update {
-                        it.copy(isPreviewLoading = false, error = "Preview failed: network error")
+                        it.copy(isRegenerating = false, error = "Preview failed: network error")
                     }
                 }
             }
@@ -176,9 +184,10 @@ class EditEntryViewModel @Inject constructor(
         _uiState.update { state ->
             state.copy(
                 toggleStates = state.metadata.associate { it.id to true },
-                previewNarrative = null,
-                isPreviewLoading = false,
-                hasMetadataChanges = false
+                editedNarrative = state.entry?.narrative ?: "",
+                isRegenerating = false,
+                hasMetadataChanges = false,
+                hasNarrativeChanges = false
             )
         }
     }
@@ -197,11 +206,11 @@ class EditEntryViewModel @Inject constructor(
 
         viewModelScope.launch {
             val result = if (state.hasMetadataChanges) {
-                // Reconsolidate with included metadata
+                // Metadata was excluded — reconsolidate to delete excluded rows and rewrite
                 val includedIds = state.toggleStates.filter { it.value }.keys.toList()
                 metadataRepository.commitReconsolidation(entryId, includedIds)
             } else if (state.hasNarrativeChanges) {
-                // Simple narrative update
+                // Narrative edited (manually or via regenerate) — simple update
                 journalRepository.updateNarrative(entryId, state.editedNarrative)
             } else {
                 _uiState.update { it.copy(isSaving = false) }
@@ -217,6 +226,46 @@ class EditEntryViewModel @Inject constructor(
                 }
                 is ApiResult.NetworkError -> {
                     _uiState.update { it.copy(isSaving = false, error = "Save failed: network error") }
+                }
+            }
+        }
+    }
+
+    fun regenerate() {
+        debounceJob?.cancel()
+        previewJob?.cancel()
+
+        val state = _uiState.value
+        val includedIds = state.toggleStates.filter { it.value }.keys.toList()
+
+        if (includedIds.isEmpty()) {
+            _uiState.update {
+                it.copy(editedNarrative = "", hasNarrativeChanges = true, isRegenerating = false)
+            }
+            return
+        }
+
+        previewJob = viewModelScope.launch {
+            _uiState.update { it.copy(isRegenerating = true) }
+            when (val result = metadataRepository.previewReconsolidation(entryId, includedIds)) {
+                is ApiResult.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            editedNarrative = result.data.narrative,
+                            hasNarrativeChanges = result.data.narrative != it.entry?.narrative,
+                            isRegenerating = false
+                        )
+                    }
+                }
+                is ApiResult.Error -> {
+                    _uiState.update {
+                        it.copy(isRegenerating = false, error = "Regenerate failed: ${result.message}")
+                    }
+                }
+                is ApiResult.NetworkError -> {
+                    _uiState.update {
+                        it.copy(isRegenerating = false, error = "Regenerate failed: network error")
+                    }
                 }
             }
         }

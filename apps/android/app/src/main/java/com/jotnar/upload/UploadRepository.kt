@@ -113,26 +113,31 @@ class UploadRepository @Inject constructor(
         }
 
         return if (response.isSuccessful && body != null) {
-            body.results.filter { it.error != null }.forEach { result ->
-                Log.e("Upload", "Batch item ${result.index} failed: ${result.error}")
+            // Server accepted the images for async processing.
+            // Log any that were rejected at intake.
+            body.results?.filter { it.error != null }?.forEach { result ->
+                Log.e("Upload", "Batch item ${result.index} rejected: ${result.error}")
             }
 
-            val succeededIds = body.results
-                .filter { it.error == null && it.id != null }
-                .mapNotNull { result -> batch.getOrNull(result.index)?.id }
+            val rejectedIndices = body.results
+                ?.filter { it.error != null }
+                ?.map { it.index }
+                ?.toSet() ?: emptySet()
 
-            if (succeededIds.isNotEmpty()) {
-                uploadDao.deleteByIds(succeededIds)
+            // Remove accepted items from local queue
+            val acceptedIds = batch.filterIndexed { i, _ -> i !in rejectedIndices }.map { it.id }
+            if (acceptedIds.isNotEmpty()) {
+                uploadDao.deleteByIds(acceptedIds)
             }
 
-            // Increment retry for failed items
-            val failedIds = batch.map { it.id }.filter { it !in succeededIds }
-            for (id in failedIds) {
+            // Increment retry for rejected items
+            val rejectedIds = batch.filterIndexed { i, _ -> i in rejectedIndices }.map { it.id }
+            for (id in rejectedIds) {
                 uploadDao.incrementRetry(id)
             }
 
             val remaining = uploadDao.count()
-            UploadResult(body.succeeded, body.failed, remaining)
+            UploadResult(body.accepted, body.rejected, remaining)
         } else {
             for (item in batch) {
                 uploadDao.incrementRetry(item.id)

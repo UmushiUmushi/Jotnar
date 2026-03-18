@@ -80,7 +80,9 @@ class JournalListViewModel @Inject constructor(
             when (val result = journalRepository.getEntries(limit = pageSize, offset = offset)) {
                 is ApiResult.Success -> {
                     _uiState.update {
-                        val allEntries = it.entries + result.data.entries
+                        val existingIds = it.entries.map { e -> e.id }.toSet()
+                        val newEntries = result.data.entries.filter { e -> e.id !in existingIds }
+                        val allEntries = it.entries + newEntries
                         it.copy(
                             entries = allEntries,
                             total = result.data.total,

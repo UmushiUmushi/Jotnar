@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.TimeZone
 import javax.inject.Inject
 
 data class SettingsUiState(
@@ -78,8 +79,16 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(isLoadingServerConfig = true) }
             when (val result = settingsRepository.getServerConfig()) {
                 is ApiResult.Success -> {
+                    val config = result.data
                     _uiState.update {
-                        it.copy(serverConfig = result.data, isLoadingServerConfig = false)
+                        it.copy(serverConfig = config, isLoadingServerConfig = false)
+                    }
+                    // If timezone is still the server default, push the device timezone
+                    if (config.timezone == "UTC") {
+                        val deviceTz = TimeZone.getDefault().id
+                        if (deviceTz != "UTC") {
+                            updateServerConfig(timezone = deviceTz)
+                        }
                     }
                 }
                 else -> {
@@ -162,7 +171,8 @@ class SettingsViewModel @Inject constructor(
         consolidationWindowMin: Int? = null,
         interpretationDetail: String? = null,
         journalTone: String? = null,
-        metadataRetentionDays: Int? = null
+        metadataRetentionDays: Int? = null,
+        timezone: String? = null
     ) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSavingServerConfig = true) }
@@ -170,7 +180,8 @@ class SettingsViewModel @Inject constructor(
                 consolidationWindowMin = consolidationWindowMin,
                 interpretationDetail = interpretationDetail,
                 journalTone = journalTone,
-                metadataRetentionDays = metadataRetentionDays
+                metadataRetentionDays = metadataRetentionDays,
+                timezone = timezone
             )
             when (val result = settingsRepository.updateServerConfig(request)) {
                 is ApiResult.Success -> {

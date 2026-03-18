@@ -1,6 +1,8 @@
 package com.jotnar.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -10,6 +12,7 @@ import com.jotnar.auth.AuthScreen
 import com.jotnar.capture.CaptureControlScreen
 import com.jotnar.journal.EditEntryScreen
 import com.jotnar.journal.JournalListScreen
+import com.jotnar.journal.JournalListViewModel
 import com.jotnar.settings.AppBlocklistScreen
 import com.jotnar.settings.SettingsScreen
 import com.jotnar.upload.UploadQueueScreen
@@ -45,8 +48,19 @@ fun JotnarNavGraph(
             )
         }
 
-        composable(Routes.JOURNAL_LIST) {
+        composable(Routes.JOURNAL_LIST) { backStackEntry ->
+            // Refresh journal list when returning from edit with saved changes
+            val savedResult = backStackEntry.savedStateHandle.get<Boolean>("entry_saved")
+            val viewModel: JournalListViewModel = hiltViewModel()
+            LaunchedEffect(savedResult) {
+                if (savedResult == true) {
+                    viewModel.refresh()
+                    backStackEntry.savedStateHandle.remove<Boolean>("entry_saved")
+                }
+            }
+
             JournalListScreen(
+                viewModel = viewModel,
                 onEditEntry = { id -> navController.navigate(Routes.journalEdit(id)) },
                 onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
                 onNavigateToUploadQueue = { navController.navigate(Routes.UPLOAD_QUEUE) },
@@ -61,7 +75,12 @@ fun JotnarNavGraph(
             val entryId = backStackEntry.arguments?.getString("id") ?: return@composable
             EditEntryScreen(
                 entryId = entryId,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { saved ->
+                    navController.previousBackStackEntry
+                        ?.savedStateHandle
+                        ?.set("entry_saved", saved)
+                    navController.popBackStack()
+                }
             )
         }
 

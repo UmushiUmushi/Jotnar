@@ -14,6 +14,7 @@ type ConfigResponse struct {
 	InterpretationDetail   string `json:"interpretation_detail"`
 	JournalTone            string `json:"journal_tone"`
 	MetadataRetentionDays  *int   `json:"metadata_retention_days"`
+	Timezone               string `json:"timezone"`
 }
 
 type UpdateConfigRequest struct {
@@ -21,6 +22,7 @@ type UpdateConfigRequest struct {
 	InterpretationDetail   *string `json:"interpretation_detail,omitempty"`
 	JournalTone            *string `json:"journal_tone,omitempty"`
 	MetadataRetentionDays  *int    `json:"metadata_retention_days,omitempty"`
+	Timezone               *string `json:"timezone,omitempty"`
 }
 
 type ConfigHandler struct {
@@ -38,6 +40,7 @@ func (h *ConfigHandler) GetConfig(c *gin.Context) {
 		InterpretationDetail:   cfg.InterpretationDetail,
 		JournalTone:            cfg.JournalTone,
 		MetadataRetentionDays:  cfg.MetadataRetentionDays,
+		Timezone:               cfg.Timezone,
 	})
 }
 
@@ -62,18 +65,22 @@ func (h *ConfigHandler) UpdateConfig(c *gin.Context) {
 	if req.MetadataRetentionDays != nil {
 		cfg.MetadataRetentionDays = req.MetadataRetentionDays
 	}
+	if req.Timezone != nil {
+		cfg.Timezone = *req.Timezone
+	}
 
 	if err := h.config.Update(cfg); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save config"})
 		return
 	}
 
-	log.Printf("Config: updated — window=%dmin, detail=%s, tone=%s",
-		cfg.ConsolidationWindowMin, cfg.InterpretationDetail, cfg.JournalTone)
+	log.Printf("Config: updated — window=%dmin, detail=%s, tone=%s, tz=%s",
+		cfg.ConsolidationWindowMin, cfg.InterpretationDetail, cfg.JournalTone, cfg.Timezone)
 	c.JSON(http.StatusOK, ConfigResponse{
 		ConsolidationWindowMin: cfg.ConsolidationWindowMin,
 		InterpretationDetail:   cfg.InterpretationDetail,
 		JournalTone:            cfg.JournalTone,
 		MetadataRetentionDays:  cfg.MetadataRetentionDays,
+		Timezone:               cfg.Timezone,
 	})
 }

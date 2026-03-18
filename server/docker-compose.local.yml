@@ -16,9 +16,11 @@ services:
       - jotnar-data:/data
     environment:
       - INFERENCE_HOST=${INFERENCE_HOST:-http://host.docker.internal:11434}
-      - INFERENCE_TIMEOUT_SEC=120
+      - INFERENCE_TIMEOUT_SEC=300
       - INFERENCE_MAX_RETRIES=3
+      - INFERENCE_WORKERS=${INFERENCE_WORKERS:-1}
       - JOTNAR_DB_PATH=/data/journal.db
+      - JOTNAR_CONFIG_PATH=/data/config.yml
     restart: unless-stopped
 
 volumes:

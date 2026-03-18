@@ -22,7 +22,7 @@ Analyze the screenshot and return a JSON object with these fields:
 
 %s
 
-Return ONLY valid JSON, no markdown fences or extra text.`, detailInstruction)
+Return ONLY valid JSON, no markdown fences or extra text. /no_think`, detailInstruction)
 }
 
 func ConsolidationSystemPrompt(tone string) string {
@@ -42,5 +42,5 @@ write a single cohesive journal entry that summarizes what the user was doing du
 
 %s
 
-Write the journal entry directly — no JSON, no markdown, just the narrative text.`, toneInstruction)
+Write the journal entry directly — no JSON, no markdown, just the narrative text. /no_think`, toneInstruction)
 }

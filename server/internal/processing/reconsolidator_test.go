@@ -167,6 +167,11 @@ func TestCommit_WithProvidedNarrative(t *testing.T) {
 
 	var inferenceCalled atomic.Int32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/models" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"data":[{"id":"test-model"}]}`))
+			return
+		}
 		inferenceCalled.Add(1)
 		resp := map[string]any{
 			"choices": []map[string]any{
@@ -209,6 +214,11 @@ func TestCommit_WithoutNarrative_CallsInference(t *testing.T) {
 
 	var inferenceCalled atomic.Int32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/models" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"data":[{"id":"test-model"}]}`))
+			return
+		}
 		inferenceCalled.Add(1)
 		resp := map[string]any{
 			"choices": []map[string]any{

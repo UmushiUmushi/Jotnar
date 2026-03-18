@@ -71,6 +71,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	metadataStore := store.NewMetadataStore(db)
 
 	interpreter := processing.NewInterpreter(infClient, cfgMgr, metadataStore)
+	captureQueue := processing.NewQueue(interpreter, 100, 1)
 	consolidator := processing.NewConsolidator(infClient, cfgMgr, metadataStore, journalStore)
 	reconsolidator := processing.NewReconsolidator(consolidator, cfgMgr, metadataStore, journalStore)
 
@@ -83,6 +84,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 		JournalStore:    journalStore,
 		MetadataStore:   metadataStore,
 		DeviceStore:     deviceStore,
+		Queue:           captureQueue,
 		Interpreter:     interpreter,
 		Consolidator:    consolidator,
 		Reconsolidator:  reconsolidator,
@@ -412,15 +414,12 @@ func TestCapture_Success(t *testing.T) {
 	env := setupTestEnv(t)
 	w := env.doMultipart("/capture", "screenshot", validPNG, nil)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("status code = %d, want 200\nbody: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("status code = %d, want 202\nbody: %s", w.Code, w.Body.String())
 	}
 	resp := parseJSON(t, w)
-	if resp["id"] == nil || resp["id"] == "" {
-		t.Error("response should include id")
-	}
-	if resp["interpretation"] == nil {
-		t.Error("response should include interpretation")
+	if int(resp["accepted"].(float64)) != 1 {
+		t.Error("response should have accepted=1")
 	}
 }
 

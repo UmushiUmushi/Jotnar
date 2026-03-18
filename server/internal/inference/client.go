@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -38,13 +39,15 @@ type ChatRequest struct {
 	Messages    []Message `json:"messages"`
 	Temperature float64   `json:"temperature,omitempty"`
 	MaxTokens   int       `json:"max_tokens,omitempty"`
+	Think       *bool     `json:"think,omitempty"`
 }
 
 // ChatResponse is the OpenAI-compatible chat completion response.
 type ChatResponse struct {
 	Choices []struct {
 		Message struct {
-			Content string `json:"content"`
+			Content   string `json:"content"`
+			Reasoning string `json:"reasoning"`
 		} `json:"message"`
 	} `json:"choices"`
 }
@@ -68,7 +71,7 @@ func DefaultClientConfig() ClientConfig {
 		host = "http://localhost:8000"
 	}
 
-	timeout := 120 * time.Second
+	timeout := 300 * time.Second
 	if v := os.Getenv("INFERENCE_TIMEOUT_SEC"); v != "" {
 		if sec, err := strconv.Atoi(v); err == nil && sec > 0 {
 			timeout = time.Duration(sec) * time.Second
@@ -134,6 +137,20 @@ func isRetryable(statusCode int) bool {
 	}
 }
 
+// BoolPtr returns a pointer to a bool value, for use with optional fields.
+func BoolPtr(v bool) *bool { return &v }
+
+// stripThinking removes <think>...</think> blocks from model output.
+// Reasoning models may wrap chain-of-thought in these tags; we only
+// want the actual answer that follows.
+func stripThinking(s string) string {
+	if idx := strings.Index(s, "</think>"); idx != -1 {
+		return strings.TrimSpace(s[idx+len("</think>"):])
+	}
+	// No think tags — return as-is (trimmed)
+	return strings.TrimSpace(s)
+}
+
 // Complete sends a chat completion request and returns the response text.
 // Retries transient failures with exponential backoff.
 func (c *Client) Complete(req ChatRequest) (string, error) {
@@ -171,18 +188,26 @@ func (c *Client) Complete(req ChatRequest) (string, error) {
 			return "", lastErr // non-retryable HTTP error
 		}
 
-		var chatResp ChatResponse
-		decodeErr := json.NewDecoder(res.Body).Decode(&chatResp)
+		respBody, _ := io.ReadAll(res.Body)
 		res.Body.Close()
-		if decodeErr != nil {
-			return "", fmt.Errorf("decode response: %w", decodeErr)
+
+		var chatResp ChatResponse
+		if err := json.Unmarshal(respBody, &chatResp); err != nil {
+			return "", fmt.Errorf("decode response: %w", err)
 		}
 
 		if len(chatResp.Choices) == 0 {
 			return "", fmt.Errorf("no choices in response")
 		}
 
-		return chatResp.Choices[0].Message.Content, nil
+		content := stripThinking(chatResp.Choices[0].Message.Content)
+		if content == "" {
+			content = stripThinking(chatResp.Choices[0].Message.Reasoning)
+		}
+		if content == "" {
+			return "", fmt.Errorf("inference returned empty content")
+		}
+		return content, nil
 	}
 
 	return "", fmt.Errorf("inference failed after %d attempts: %w", c.maxRetries, lastErr)

@@ -8,11 +8,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -27,12 +27,12 @@ import java.time.format.FormatStyle
 fun EditEntryScreen(
     entryId: String,
     viewModel: EditEntryViewModel = hiltViewModel(),
-    onNavigateBack: () -> Unit
+    onNavigateBack: (saved: Boolean) -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
 
     LaunchedEffect(state.saved) {
-        if (state.saved) onNavigateBack()
+        if (state.saved) onNavigateBack(true)
     }
 
     Scaffold(
@@ -40,15 +40,21 @@ fun EditEntryScreen(
             TopAppBar(
                 title = { Text("Edit entry") },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(onClick = { onNavigateBack(false) }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
                     if (state.hasMetadataChanges) {
                         IconButton(onClick = { viewModel.resetToggles() }) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Reset")
+                            Icon(Icons.Default.Undo, contentDescription = "Reset toggles")
                         }
+                    }
+                    IconButton(
+                        onClick = { viewModel.regenerate() },
+                        enabled = !state.isRegenerating && !state.isSaving
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Regenerate")
                     }
                     IconButton(
                         onClick = { viewModel.requestSave() },
@@ -106,49 +112,25 @@ fun EditEntryScreen(
                     value = state.editedNarrative,
                     onValueChange = { viewModel.updateNarrative(it) },
                     modifier = Modifier.fillMaxWidth(),
+                    enabled = !state.isRegenerating,
                     minLines = 3,
                     maxLines = 10
                 )
-            }
-
-            // Preview section (shown when metadata toggles have changed)
-            if (state.previewNarrative != null || state.isPreviewLoading) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                        )
+                if (state.isRegenerating) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 8.dp)
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "Preview",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            if (state.isPreviewLoading) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        "Generating preview...",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                                    )
-                                }
-                            } else {
-                                Text(
-                                    text = state.previewNarrative ?: "",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontStyle = FontStyle.Italic,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer
-                                )
-                            }
-                        }
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Regenerating...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
@@ -193,13 +175,8 @@ fun EditEntryScreen(
 
     // Save confirmation dialog
     if (state.showSaveConfirmation) {
-        val previewText = if (state.hasMetadataChanges && state.previewNarrative != null) {
-            state.previewNarrative!!
-        } else {
-            state.editedNarrative
-        }
         ConfirmationDialog(
-            entryText = previewText,
+            entryText = state.editedNarrative,
             title = "Save changes?",
             confirmLabel = "Save",
             onConfirm = { viewModel.confirmSave() },

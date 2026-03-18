@@ -2,15 +2,26 @@
 package processing
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	"image/png"
+	"log"
 	"time"
+
+	"golang.org/x/image/draw"
 
 	"github.com/google/uuid"
 	"github.com/jotnar/server/internal/config"
 	"github.com/jotnar/server/internal/inference"
 	"github.com/jotnar/server/internal/store"
 )
+
+// maxImageWidth is the maximum width before downscaling.
+// 720px is enough detail for the model to read text and identify apps.
+const maxImageWidth = 720
 
 type Interpreter struct {
 	client   *inference.Client
@@ -26,6 +37,8 @@ func NewInterpreter(client *inference.Client, cfg *config.Manager, metadata *sto
 func (i *Interpreter) Interpret(imageData []byte, deviceID string, capturedAt time.Time) (*store.Metadata, error) {
 	cfg := i.config.Get()
 
+	imageData = downscaleImage(imageData)
+
 	b64Image := base64.StdEncoding.EncodeToString(imageData)
 
 	req := inference.ChatRequest{
@@ -37,7 +50,8 @@ func (i *Interpreter) Interpret(imageData []byte, deviceID string, capturedAt ti
 			}},
 		},
 		Temperature: 0.3,
-		MaxTokens:   500,
+		MaxTokens:   2048,
+		Think:       inference.BoolPtr(false),
 	}
 
 	raw, err := i.client.Complete(req)
@@ -65,4 +79,35 @@ func (i *Interpreter) Interpret(imageData []byte, deviceID string, capturedAt ti
 	}
 
 	return &meta, nil
+}
+
+// downscaleImage resizes the image to maxImageWidth if it's wider,
+// preserving aspect ratio. Returns the original bytes if decoding
+// fails or the image is already small enough.
+func downscaleImage(data []byte) []byte {
+	src, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return data
+	}
+
+	bounds := src.Bounds()
+	srcW := bounds.Dx()
+	if srcW <= maxImageWidth {
+		return data
+	}
+
+	ratio := float64(maxImageWidth) / float64(srcW)
+	dstW := maxImageWidth
+	dstH := int(float64(bounds.Dy()) * ratio)
+
+	dst := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
+	draw.BiLinear.Scale(dst, dst.Bounds(), src, bounds, draw.Over, nil)
+
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, dst); err != nil {
+		return data
+	}
+
+	log.Printf("Downscaled image: %dx%d → %dx%d (%d → %d bytes)", srcW, bounds.Dy(), dstW, dstH, len(data), buf.Len())
+	return buf.Bytes()
 }

@@ -25,6 +25,7 @@ type Dependencies struct {
 	JournalStore   *store.JournalStore
 	MetadataStore  *store.MetadataStore
 	DeviceStore    *store.DeviceStore
+	Queue          *processing.Queue
 	Interpreter    *processing.Interpreter
 	Consolidator   *processing.Consolidator
 	Reconsolidator *processing.Reconsolidator
@@ -38,7 +39,7 @@ func NewServer(deps Dependencies) *Server {
 	statusHandler := routes.NewStatusHandler(deps.InferenceClient, deps.DeviceStore, deps.Version)
 	authHandler := routes.NewAuthHandler(deps.PairingService, deps.RecoveryService)
 	journalHandler := routes.NewJournalHandler(deps.JournalStore)
-	captureHandler := routes.NewCaptureHandler(deps.Interpreter)
+	captureHandler := routes.NewCaptureHandler(deps.Queue)
 	configHandler := routes.NewConfigHandler(deps.ConfigManager)
 	metadataHandler := routes.NewMetadataHandler(deps.MetadataStore, deps.Reconsolidator)
 

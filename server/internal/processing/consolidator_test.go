@@ -41,6 +41,11 @@ func testConfig(t *testing.T) *config.Manager {
 
 func mockInferenceServer(response string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/models" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"data":[{"id":"test-model"}]}`))
+			return
+		}
 		resp := map[string]any{
 			"choices": []map[string]any{
 				{"message": map[string]string{"content": response}},

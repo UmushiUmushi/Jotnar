@@ -65,7 +65,8 @@ func (c *Consolidator) consolidateBatch(batch []store.Metadata, tone string) err
 			{Role: "user", Content: prompt},
 		},
 		Temperature: 0.5,
-		MaxTokens:   1000,
+		MaxTokens:   2048,
+		Think:       inference.BoolPtr(false),
 	}
 
 	narrative, err := c.client.Complete(req)
@@ -106,7 +107,8 @@ func (c *Consolidator) SoftConsolidate(rows []store.Metadata, tone string) (stri
 			{Role: "user", Content: prompt},
 		},
 		Temperature: 0.5,
-		MaxTokens:   1000,
+		MaxTokens:   2048,
+		Think:       inference.BoolPtr(false),
 	}
 
 	narrative, err := c.client.Complete(req)

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -92,6 +93,13 @@ func main() {
 	metadataStore := store.NewMetadataStore(database)
 
 	interpreter := processing.NewInterpreter(infClient, cfgManager, metadataStore)
+	inferenceWorkers := 1
+	if v := os.Getenv("INFERENCE_WORKERS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			inferenceWorkers = n
+		}
+	}
+	captureQueue := processing.NewQueue(interpreter, 200, inferenceWorkers)
 	consolidator := processing.NewConsolidator(infClient, cfgManager, metadataStore, journalStore)
 	reconsolidator := processing.NewReconsolidator(consolidator, cfgManager, metadataStore, journalStore)
 
@@ -122,6 +130,9 @@ func main() {
 	// Shutdown context — cancelled on SIGINT/SIGTERM.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// Background processing queue (interprets screenshots sequentially)
+	go captureQueue.Run(ctx)
 
 	// Background consolidation worker
 	go func() {
@@ -167,6 +178,7 @@ func main() {
 		JournalStore:    journalStore,
 		MetadataStore:   metadataStore,
 		DeviceStore:     deviceStore,
+		Queue:           captureQueue,
 		Interpreter:     interpreter,
 		Consolidator:    consolidator,
 		Reconsolidator:  reconsolidator,

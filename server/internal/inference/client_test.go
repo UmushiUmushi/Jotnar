@@ -10,7 +10,15 @@ import (
 )
 
 func newMockInferenceServer(handler http.HandlerFunc) (*httptest.Server, *Client) {
-	ts := httptest.NewServer(handler)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Handle model detection during NewClient without hitting the test handler
+		if r.URL.Path == "/v1/models" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"data":[{"id":"test-model"}]}`))
+			return
+		}
+		handler(w, r)
+	}))
 	client := NewClient(ClientConfig{
 		Host:       ts.URL,
 		Timeout:    0,
@@ -23,11 +31,13 @@ func chatResponseJSON(content string) []byte {
 	resp := ChatResponse{
 		Choices: []struct {
 			Message struct {
-				Content string `json:"content"`
+				Content   string `json:"content"`
+				Reasoning string `json:"reasoning"`
 			} `json:"message"`
 		}{
 			{Message: struct {
-				Content string `json:"content"`
+				Content   string `json:"content"`
+				Reasoning string `json:"reasoning"`
 			}{Content: content}},
 		},
 	}

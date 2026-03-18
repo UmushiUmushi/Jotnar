@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
+	_ "time/tzdata"
 
 	"gopkg.in/yaml.v3"
 )
@@ -15,6 +17,7 @@ type ServerConfig struct {
 	InterpretationDetail   string `yaml:"interpretation_detail" json:"interpretation_detail"`
 	JournalTone            string `yaml:"journal_tone" json:"journal_tone"`
 	MetadataRetentionDays  *int   `yaml:"metadata_retention_days" json:"metadata_retention_days"`
+	Timezone               string `yaml:"timezone" json:"timezone"`
 }
 
 var validInterpretationDetails = map[string]bool{
@@ -43,6 +46,9 @@ func (c *ServerConfig) Validate() error {
 	if c.MetadataRetentionDays != nil && *c.MetadataRetentionDays < 1 {
 		return fmt.Errorf("metadata_retention_days must be positive or null, got %d", *c.MetadataRetentionDays)
 	}
+	if _, err := time.LoadLocation(c.Timezone); err != nil {
+		return fmt.Errorf("invalid timezone %q: %w", c.Timezone, err)
+	}
 	return nil
 }
 
@@ -52,6 +58,7 @@ func DefaultServerConfig() ServerConfig {
 		InterpretationDetail:   "standard",
 		JournalTone:            "casual",
 		MetadataRetentionDays:  nil,
+		Timezone:               "UTC",
 	}
 }
 

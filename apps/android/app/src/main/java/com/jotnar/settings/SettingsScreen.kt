@@ -17,6 +17,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.jotnar.ui.theme.ThemeMode
+import java.util.TimeZone
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -165,6 +166,13 @@ fun SettingsScreen(
                         onValueChange = {
                             viewModel.updateServerConfig(consolidationWindowMin = it.toInt())
                         }
+                    )
+                }
+
+                item {
+                    TimezoneDropdownSetting(
+                        value = config.timezone,
+                        onValueChange = { viewModel.updateServerConfig(timezone = it) }
                     )
                 }
             }
@@ -372,6 +380,62 @@ private fun DropdownSetting(
                     onClick = {
                         onValueChange(option)
                         expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TimezoneDropdownSetting(
+    value: String,
+    onValueChange: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    val allTimezones = remember { TimeZone.getAvailableIDs().sorted() }
+    val filteredTimezones = remember(searchQuery) {
+        if (searchQuery.isBlank()) allTimezones
+        else allTimezones.filter { it.contains(searchQuery, ignoreCase = true) }
+    }
+
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = { },
+            readOnly = true,
+            label = { Text("Timezone") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor()
+                .padding(horizontal = 16.dp)
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = {
+                expanded = false
+                searchQuery = ""
+            }
+        ) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Search...") },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+            filteredTimezones.take(50).forEach { tz ->
+                DropdownMenuItem(
+                    text = { Text(tz) },
+                    onClick = {
+                        onValueChange(tz)
+                        expanded = false
+                        searchQuery = ""
                     }
                 )
             }

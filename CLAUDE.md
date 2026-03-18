@@ -138,6 +138,24 @@ All endpoints except `/auth/pair`, `/auth/recover`, and `/status` require a vali
 | Containerization | Docker Compose (jotnar + sglang) |
 | API contract | OpenAPI YAML in `shared/api-spec.yml` |
 
+## Inference Deployment & Limitations
+
+**Target audience**: Users with an NVIDIA GPU (6GB+ VRAM). The primary deployment uses SGLang with Docker Compose.
+
+**Two deployment modes:**
+- `docker-compose.yml` — Full setup: Jotnar server + SGLang. Requires NVIDIA GPU with CUDA. Just `docker compose up`.
+- `docker-compose.local.yml` — Jotnar server only. For users running their own inference backend (e.g. Ollama natively). Set `INFERENCE_HOST` to point at it.
+
+**Capture is async**: The `/capture` and `/capture/batch` endpoints return 202 immediately after queuing. A background worker processes screenshots sequentially (or concurrently based on `INFERENCE_WORKERS`). This decouples upload speed from inference speed — the app never waits for the model.
+
+**`INFERENCE_WORKERS` env var** controls how many images are interpreted concurrently (default: 4 for GPU, 1 for local/Ollama):
+- With SGLang, concurrent requests enable GPU-level batching — SGLang packs multiple requests into a single GPU kernel call. Each worker still sends its own separate `/v1/chat/completions` request; SGLang handles the batching internally and transparently. Setting this to 1 disables batching.
+- With Ollama, the model processes one request at a time regardless, so more workers just creates contention. Keep at 1.
+
+**CPU-only inference is not viable for the default model.** Qwen3.5-4B vision takes minutes per image on CPU. Ollama in Docker on macOS cannot access Metal (Apple GPU), so it runs on CPU and will time out. Users on Mac must run Ollama natively to get Metal acceleration. Even then, expect ~30-60s per vision request vs ~2-5s on a proper NVIDIA GPU.
+
+**Minimum GPU specs**: 6GB+ VRAM NVIDIA (RTX 3060, 4060, etc.). Qwen3.5-4B with AWQ 4-bit quantization uses ~2.5GB, leaving room for KV cache and concurrent batching. 16GB VRAM can comfortably run `INFERENCE_WORKERS=4`.
+
 ## Development Guidelines
 
 - The server compiles to a single binary. No supervisord, no process managers. The API server and background worker run as goroutines.
