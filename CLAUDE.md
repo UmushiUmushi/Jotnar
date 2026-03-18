@@ -36,7 +36,7 @@ jotnar/
 │   │   └── inference/    # OpenAI-compatible client for SGLang
 │   ├── Dockerfile
 │   └── docker-compose.yml
-├── shared/               # OpenAPI spec, shared constants
+├── shared/               # OpenAPI spec
 └── docs/
 ```
 
@@ -96,9 +96,10 @@ Two categories, stored in different places:
 
 ```sql
 devices (id, name, paired_at, token_hash, last_seen)
-metadata (id, device_id, captured_at, interpretation, category, entry_id, created_at)
+metadata (id, device_id, captured_at, interpretation, category, app_name, entry_id, created_at)
 journal_entries (id, narrative, time_start, time_end, edited, created_at, updated_at)
 recovery (id CHECK(id=1), key_hash)
+pairing_codes (code, expires_at)
 ```
 
 The `metadata.entry_id` is nullable — rows exist with `entry_id = NULL` until the consolidator processes them and links them to a journal entry.
@@ -108,6 +109,7 @@ The `metadata.entry_id` is nullable — rows exist with `entry_id = NULL` until 
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | /capture | Receive screenshot from device |
+| POST | /capture/batch | Batch upload up to 50 screenshots |
 | GET | /journal | List journal entries |
 | GET | /journal/{id} | Get single entry |
 | PUT | /journal/{id} | Edit entry narrative |

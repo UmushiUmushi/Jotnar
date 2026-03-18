@@ -2,10 +2,738 @@ openapi: 3.1.0
 info:
   title: Jotnar API
   version: 0.1.0
-  description: Automatic journaling server API.
+  description: >
+    REST API for the Jotnar automatic journaling server.
+    All endpoints except /status, /auth/pair, and /auth/recover require
+    a valid device token in the Authorization: Bearer header.
 
 servers:
-  - url: http://localhost:8910
+  - url: http://{host}:8910
+    variables:
+      host:
+        default: localhost
+        description: Jotnar server IP or hostname (binds to 0.0.0.0)
 
-paths: {}
-# TODO: Define paths for all endpoints
+security:
+  - BearerAuth: []
+
+paths:
+  /status:
+    get:
+      summary: Server health check
+      security: []
+      operationId: getStatus
+      responses:
+        "200":
+          description: Server status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /auth/pair:
+    post:
+      summary: Pair a device with a one-time code
+      security: []
+      operationId: pairDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PairRequest"
+      responses:
+        "200":
+          description: Device paired successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PairResponse"
+        "400":
+          description: Missing or invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid or expired pairing code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/pair/new:
+    post:
+      summary: Generate a new pairing code for another device
+      operationId: generatePairingCode
+      responses:
+        "200":
+          description: New pairing code generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: "A3K7W2"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/recover:
+    post:
+      summary: Recover access with a recovery key
+      security: []
+      operationId: recoverAccess
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecoverRequest"
+      responses:
+        "200":
+          description: Recovery successful, new pairing code generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecoverResponse"
+        "401":
+          description: Invalid recovery key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /capture:
+    post:
+      summary: Upload a single screenshot for interpretation
+      operationId: captureScreenshot
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - screenshot
+              properties:
+                screenshot:
+                  type: string
+                  format: binary
+                  description: PNG or JPEG image (max 10 MB)
+                captured_at:
+                  type: string
+                  format: date-time
+                  description: When the screenshot was taken (RFC 3339). Defaults to server time.
+      responses:
+        "200":
+          description: Screenshot interpreted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaptureResponse"
+        "400":
+          description: Missing file or invalid image format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description: Screenshot exceeds 10 MB limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Interpretation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /capture/batch:
+    post:
+      summary: Upload up to 50 screenshots for batch interpretation
+      operationId: batchCaptureScreenshots
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - screenshots
+              properties:
+                screenshots:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: PNG or JPEG images (max 10 MB each, max 50 files)
+                captured_at:
+                  type: array
+                  items:
+                    type: string
+                    format: date-time
+                  description: Timestamps for each screenshot (RFC 3339). Index-matched to screenshots.
+      responses:
+        "200":
+          description: All screenshots interpreted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchCaptureResponse"
+        "207":
+          description: Partial success — some screenshots failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchCaptureResponse"
+        "400":
+          description: No screenshots provided or exceeds batch limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: All screenshots failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchCaptureResponse"
+
+  /journal:
+    get:
+      summary: List journal entries (paginated)
+      operationId: listJournalEntries
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Number of entries to return (max 100)
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Number of entries to skip
+      responses:
+        "200":
+          description: Paginated list of journal entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JournalListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /journal/{id}:
+    get:
+      summary: Get a single journal entry
+      operationId: getJournalEntry
+      parameters:
+        - $ref: "#/components/parameters/EntryId"
+      responses:
+        "200":
+          description: Journal entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JournalEntryResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Entry not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    put:
+      summary: Edit journal entry narrative
+      operationId: updateJournalEntry
+      parameters:
+        - $ref: "#/components/parameters/EntryId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateJournalRequest"
+      responses:
+        "200":
+          description: Updated journal entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JournalEntryResponse"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Entry not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      summary: Delete journal entry and unlink metadata
+      operationId: deleteJournalEntry
+      parameters:
+        - $ref: "#/components/parameters/EntryId"
+      responses:
+        "200":
+          description: Entry deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                    example: true
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Delete failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /journal/{id}/metadata:
+    get:
+      summary: Get metadata rows linked to a journal entry
+      operationId: getEntryMetadata
+      parameters:
+        - $ref: "#/components/parameters/EntryId"
+      responses:
+        "200":
+          description: Metadata list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetadataListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /journal/{id}/preview:
+    post:
+      summary: Preview reconsolidation without saving
+      operationId: previewReconsolidation
+      parameters:
+        - $ref: "#/components/parameters/EntryId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReconsolidateRequest"
+      responses:
+        "200":
+          description: Preview narrative
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreviewResponse"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Preview generation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /journal/{id}/reconsolidate:
+    post:
+      summary: Commit reconsolidation — delete excluded metadata and rewrite entry
+      operationId: commitReconsolidation
+      parameters:
+        - $ref: "#/components/parameters/EntryId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReconsolidateRequest"
+      responses:
+        "200":
+          description: Updated journal entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JournalEntryResponse"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Reconsolidation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /config:
+    get:
+      summary: Get server configuration
+      operationId: getConfig
+      responses:
+        "200":
+          description: Current server config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    put:
+      summary: Update server configuration (partial update)
+      operationId: updateConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateConfigRequest"
+      responses:
+        "200":
+          description: Updated config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigResponse"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Failed to save config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Device token obtained via pairing
+
+  parameters:
+    EntryId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Journal entry ID
+
+  schemas:
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+
+    StatusResponse:
+      type: object
+      properties:
+        version:
+          type: string
+          example: "0.1.0"
+        model_available:
+          type: boolean
+        device_count:
+          type: integer
+
+    PairRequest:
+      type: object
+      required:
+        - code
+        - device_name
+      properties:
+        code:
+          type: string
+          example: "A3K7W2"
+        device_name:
+          type: string
+          example: "Sharon's Pixel 8"
+
+    PairResponse:
+      type: object
+      properties:
+        device_id:
+          type: string
+          format: uuid
+        token:
+          type: string
+
+    RecoverRequest:
+      type: object
+      required:
+        - recovery_key
+      properties:
+        recovery_key:
+          type: string
+
+    RecoverResponse:
+      type: object
+      properties:
+        pairing_code:
+          type: string
+          example: "A3K7W2"
+
+    CaptureResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        interpretation:
+          type: string
+        category:
+          type: string
+          enum: [gaming, social, browsing, coding, productivity, media, communication, other]
+        app_name:
+          type: string
+
+    BatchCaptureResult:
+      type: object
+      properties:
+        index:
+          type: integer
+        id:
+          type: string
+          format: uuid
+        interpretation:
+          type: string
+        category:
+          type: string
+        app_name:
+          type: string
+        error:
+          type: string
+
+    BatchCaptureResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/BatchCaptureResult"
+        succeeded:
+          type: integer
+        failed:
+          type: integer
+
+    JournalEntryResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        narrative:
+          type: string
+        time_start:
+          type: string
+          format: date-time
+        time_end:
+          type: string
+          format: date-time
+        edited:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    JournalListResponse:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/JournalEntryResponse"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    UpdateJournalRequest:
+      type: object
+      required:
+        - narrative
+      properties:
+        narrative:
+          type: string
+
+    MetadataResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        device_id:
+          type: string
+          format: uuid
+        captured_at:
+          type: string
+          format: date-time
+        interpretation:
+          type: string
+        category:
+          type: string
+        app_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    MetadataListResponse:
+      type: object
+      properties:
+        metadata:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetadataResponse"
+
+    ReconsolidateRequest:
+      type: object
+      required:
+        - include_metadata_ids
+      properties:
+        include_metadata_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        narrative:
+          type: string
+          description: Optional pre-generated narrative. If empty, inference generates one.
+
+    PreviewResponse:
+      type: object
+      properties:
+        narrative:
+          type: string
+
+    ConfigResponse:
+      type: object
+      properties:
+        consolidation_window_min:
+          type: integer
+          example: 30
+        interpretation_detail:
+          type: string
+          enum: [minimal, standard, detailed]
+        journal_tone:
+          type: string
+          enum: [casual, concise, narrative]
+        metadata_retention_days:
+          type: integer
+          nullable: true
+
+    UpdateConfigRequest:
+      type: object
+      properties:
+        consolidation_window_min:
+          type: integer
+          minimum: 1
+        interpretation_detail:
+          type: string
+          enum: [minimal, standard, detailed]
+        journal_tone:
+          type: string
+          enum: [casual, concise, narrative]
+        metadata_retention_days:
+          type: integer
+          minimum: 1
+          nullable: true
