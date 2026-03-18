@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">Jotnar uses this service to capture periodic screenshots for automatic journaling. Screenshots are sent to your self-hosted server for interpretation and deleted immediately after. No data leaves your network.</string>
+</resources>

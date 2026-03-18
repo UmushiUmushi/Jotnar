@@ -1,13 +1,10 @@
 package com.jotnar.capture
 
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.media.projection.MediaProjectionManager
-import androidx.activity.result.ActivityResultLauncher
+import android.provider.Settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.jotnar.service.CaptureService
 import com.jotnar.settings.DevicePreferences
 import com.jotnar.upload.UploadRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,6 +14,7 @@ import javax.inject.Inject
 
 data class CaptureControlUiState(
     val captureState: CaptureState = CaptureState.Idle,
+    val isServiceEnabled: Boolean = false,
     val queueSize: Int = 0,
     val captureIntervalSec: Int = 10,
     val wifiOnly: Boolean = true
@@ -24,8 +22,6 @@ data class CaptureControlUiState(
 
 @HiltViewModel
 class CaptureControlViewModel @Inject constructor(
-    private val captureScheduler: CaptureScheduler,
-    private val screenCaptureManager: ScreenCaptureManager,
     private val devicePreferences: DevicePreferences,
     private val uploadRepository: UploadRepository
 ) : ViewModel() {
@@ -39,14 +35,18 @@ class CaptureControlViewModel @Inject constructor(
     val uiState: StateFlow<CaptureControlUiState> = _uiState.asStateFlow()
 
     init {
-        // Observe capture state
         viewModelScope.launch {
-            captureScheduler.captureState.collect { state ->
+            JotnarAccessibilityService.captureState.collect { state ->
                 _uiState.update { it.copy(captureState = state) }
             }
         }
 
-        // Observe queue size
+        viewModelScope.launch {
+            JotnarAccessibilityService.isServiceEnabled.collect { enabled ->
+                _uiState.update { it.copy(isServiceEnabled = enabled) }
+            }
+        }
+
         viewModelScope.launch {
             uploadRepository.queueSize().collect { size ->
                 _uiState.update { it.copy(queueSize = size) }
@@ -54,18 +54,22 @@ class CaptureControlViewModel @Inject constructor(
         }
     }
 
-    fun requestMediaProjection(activity: Activity, launcher: ActivityResultLauncher<Intent>) {
-        val projectionManager = activity.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        launcher.launch(projectionManager.createScreenCaptureIntent())
+    fun openAccessibilitySettings(context: Context) {
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        context.startActivity(intent)
     }
 
-    fun startCapture(context: Context, resultCode: Int, data: Intent) {
-        val serviceIntent = CaptureService.createIntent(context, resultCode, data)
-        context.startForegroundService(serviceIntent)
+    fun startCapture() {
+        JotnarAccessibilityService.instance?.startCaptureLoop()
+    }
+
+    fun pauseCapture() {
+        JotnarAccessibilityService.instance?.pauseCaptureLoop()
     }
 
     fun stopCapture() {
-        captureScheduler.stop()
-        screenCaptureManager.stop()
+        JotnarAccessibilityService.instance?.stopCaptureLoop()
     }
 }

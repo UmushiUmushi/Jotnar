@@ -44,15 +44,25 @@ class UploadScheduler @Inject constructor(
 
         val request = OneTimeWorkRequestBuilder<UploadWorker>()
             .setConstraints(constraints)
+            .setBackoffCriteria(
+                BackoffPolicy.EXPONENTIAL,
+                WorkRequest.MIN_BACKOFF_MILLIS,
+                TimeUnit.MILLISECONDS
+            )
             .addTag(IMMEDIATE_WORK_TAG)
             .build()
 
-        WorkManager.getInstance(context).enqueue(request)
+        // KEEP: if an immediate upload is already running/queued, don't pile up another
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            IMMEDIATE_WORK_TAG,
+            ExistingWorkPolicy.KEEP,
+            request
+        )
     }
 
     fun cancelAll() {
         WorkManager.getInstance(context).cancelUniqueWork(PERIODIC_WORK_NAME)
-        WorkManager.getInstance(context).cancelAllWorkByTag(IMMEDIATE_WORK_TAG)
+        WorkManager.getInstance(context).cancelUniqueWork(IMMEDIATE_WORK_TAG)
     }
 
     private fun buildConstraints(): Constraints {

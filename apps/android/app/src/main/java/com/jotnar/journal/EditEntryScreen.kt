@@ -1,6 +1,8 @@
 package com.jotnar.journal
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -248,12 +250,16 @@ private fun MetadataRow(
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
+                var expanded by remember { mutableStateOf(false) }
                 Text(
                     text = metadata.interpretation,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = if (expanded) Int.MAX_VALUE else 2,
+                    overflow = if (expanded) TextOverflow.Clip else TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .animateContentSize()
+                        .clickable { expanded = !expanded }
                 )
             }
 

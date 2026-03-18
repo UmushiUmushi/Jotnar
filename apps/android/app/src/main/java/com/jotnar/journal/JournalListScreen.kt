@@ -17,15 +17,20 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.jotnar.network.models.JournalEntryResponse
 import com.jotnar.ui.components.ConfirmationDialog
+import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
+import java.time.format.TextStyle as JavaTextStyle
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -142,32 +147,49 @@ fun JournalListScreen(
                     }
                 }
             } else {
+                val groupedEntries = remember(state.entries) {
+                    state.entries.groupBy { entry ->
+                        try {
+                            OffsetDateTime.parse(entry.timeStart).toLocalDate()
+                        } catch (_: Exception) {
+                            LocalDate.now()
+                        }
+                    }.toSortedMap(compareByDescending { it })
+                }
+
                 LazyColumn(
                     state = listState,
+                    modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
-                    items(state.entries, key = { it.id }) { entry ->
-                        JournalEntryCard(
-                            entry = entry,
-                            isExpanded = state.expandedEntryId == entry.id,
-                            isBatchSelectMode = state.isBatchSelectMode,
-                            isSelected = entry.id in state.selectedEntryIds,
-                            onClick = {
-                                if (state.isBatchSelectMode) {
-                                    viewModel.toggleEntrySelection(entry.id)
-                                } else {
-                                    viewModel.toggleExpandEntry(entry.id)
-                                }
-                            },
-                            onLongClick = {
-                                if (!state.isBatchSelectMode) {
-                                    viewModel.enterBatchSelectMode(entry.id)
-                                }
-                            },
-                            onEdit = { onEditEntry(entry.id) },
-                            onDelete = { viewModel.requestDeleteEntry(entry) }
-                        )
+                    groupedEntries.forEach { (date, entries) ->
+                        item(key = "header-$date") {
+                            DateHeader(date)
+                        }
+
+                        items(entries, key = { it.id }) { entry ->
+                            JournalEntryCard(
+                                entry = entry,
+                                isExpanded = state.expandedEntryId == entry.id,
+                                isBatchSelectMode = state.isBatchSelectMode,
+                                isSelected = entry.id in state.selectedEntryIds,
+                                onClick = {
+                                    if (state.isBatchSelectMode) {
+                                        viewModel.toggleEntrySelection(entry.id)
+                                    } else {
+                                        viewModel.toggleExpandEntry(entry.id)
+                                    }
+                                },
+                                onLongClick = {
+                                    if (!state.isBatchSelectMode) {
+                                        viewModel.enterBatchSelectMode(entry.id)
+                                    }
+                                },
+                                onEdit = { onEditEntry(entry.id) },
+                                onDelete = { viewModel.requestDeleteEntry(entry) }
+                            )
+                        }
                     }
 
                     if (state.isLoadingMore) {
@@ -214,6 +236,43 @@ fun JournalListScreen(
     }
 }
 
+@Composable
+private fun DateHeader(date: LocalDate) {
+    val today = LocalDate.now()
+    val yesterday = today.minusDays(1)
+
+    val label = when (date) {
+        today -> "Today"
+        yesterday -> "Yesterday"
+        else -> {
+            val month = date.month.getDisplayName(JavaTextStyle.FULL, Locale.getDefault())
+            "$month ${date.dayOfMonth}"
+        }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun JournalEntryCard(
@@ -228,8 +287,8 @@ private fun JournalEntryCard(
 ) {
     val containerColor = when {
         isSelected -> MaterialTheme.colorScheme.primaryContainer
-        isExpanded -> MaterialTheme.colorScheme.secondaryContainer
-        else -> MaterialTheme.colorScheme.surfaceContainerLow
+        isExpanded -> MaterialTheme.colorScheme.surfaceContainerLow
+        else -> Color.Transparent
     }
 
     Card(
@@ -242,25 +301,21 @@ private fun JournalEntryCard(
             ),
         colors = CardDefaults.cardColors(containerColor = containerColor),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isExpanded || isSelected) 4.dp else 1.dp
+            defaultElevation = if (isSelected) 2.dp else 0.dp
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Timestamp
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+            // Time inline with narrative, text wraps naturally
             Text(
-                text = formatTimeRange(entry.timeStart, entry.timeEnd),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Narrative preview or full
-            Text(
-                text = entry.narrative,
+                text = buildAnnotatedString {
+                    withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold, fontSize = MaterialTheme.typography.titleSmall.fontSize)) {
+                        append(formatStartTime(entry.timeStart))
+                    }
+                    append("  ")
+                    append(entry.narrative)
+                },
                 style = MaterialTheme.typography.bodyMedium,
-                maxLines = if (isExpanded) Int.MAX_VALUE else 3,
-                overflow = TextOverflow.Ellipsis
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             // Expanded actions (only in non-batch mode)
@@ -332,19 +387,12 @@ private fun JournalEntryCard(
     }
 }
 
-private fun formatTimeRange(startStr: String, endStr: String): String {
+private fun formatStartTime(startStr: String): String {
     return try {
         val start = OffsetDateTime.parse(startStr)
-        val end = OffsetDateTime.parse(endStr)
-        val dateFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
-        val timeFormatter = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
-
-        val startDate = start.format(dateFormatter)
-        val startTime = start.format(timeFormatter)
-        val endTime = end.format(timeFormatter)
-
-        "$startDate, $startTime \u2013 $endTime"
+        val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
+        start.format(timeFormatter)
     } catch (_: Exception) {
-        "$startStr \u2013 $endStr"
+        startStr
     }
 }

@@ -1,6 +1,7 @@
 package com.jotnar.capture
 
-import android.app.Activity
+import android.Manifest
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -23,13 +24,15 @@ fun CaptureControlScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    val activity = context as? Activity
 
-    val projectionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
-            viewModel.startCapture(context, result.resultCode, result.data!!)
+    // Request POST_NOTIFICATIONS permission on Android 13+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { /* granted or not, proceed — notification is best-effort */ }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 
@@ -53,85 +56,156 @@ fun CaptureControlScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // Status card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = when (state.captureState) {
-                        CaptureState.Capturing -> MaterialTheme.colorScheme.primaryContainer
-                        CaptureState.PausedBlockedApp,
-                        CaptureState.PausedBatterySaver,
-                        CaptureState.PausedLowBattery -> MaterialTheme.colorScheme.tertiaryContainer
-                        CaptureState.Stopped, CaptureState.Idle -> MaterialTheme.colorScheme.surfaceVariant
-                    }
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+            // Accessibility service setup card (shown when service is not enabled)
+            if (!state.isServiceEnabled) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
                 ) {
-                    Icon(
-                        imageVector = when (state.captureState) {
-                            CaptureState.Capturing -> Icons.Default.CameraAlt
-                            CaptureState.PausedBlockedApp -> Icons.Default.Block
-                            CaptureState.PausedBatterySaver -> Icons.Default.BatterySaver
-                            CaptureState.PausedLowBattery -> Icons.Default.BatteryAlert
-                            CaptureState.Stopped, CaptureState.Idle -> Icons.Default.CameraAlt
-                        },
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp)
-                    )
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccessibilityNew,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp)
+                        )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                    Text(
-                        text = when (state.captureState) {
-                            CaptureState.Capturing -> "Capturing"
-                            CaptureState.PausedBlockedApp -> "Paused \u2014 Blocked App"
-                            CaptureState.PausedBatterySaver -> "Paused \u2014 Battery Saver"
-                            CaptureState.PausedLowBattery -> "Paused \u2014 Low Battery"
-                            CaptureState.Stopped -> "Stopped"
-                            CaptureState.Idle -> "Ready"
-                        },
-                        style = MaterialTheme.typography.titleLarge
-                    )
-
-                    if (state.queueSize > 0) {
-                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "${state.queueSize} screenshots queued",
+                            text = "Accessibility Service Required",
+                            style = MaterialTheme.typography.titleLarge
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Jotnar needs the accessibility service enabled to capture screenshots. " +
+                                "This is a one-time setup. Open Settings, find Jotnar, and toggle it on.",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onErrorContainer
                         )
                     }
                 }
-            }
 
-            // Start/Stop button
-            if (state.captureState == CaptureState.Idle || state.captureState == CaptureState.Stopped) {
                 Button(
-                    onClick = {
-                        if (activity != null) {
-                            viewModel.requestMediaProjection(activity, projectionLauncher)
-                        }
-                    },
+                    onClick = { viewModel.openAccessibilitySettings(context) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                    Icon(Icons.Default.Settings, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Start Capture")
+                    Text("Open Accessibility Settings")
                 }
-            } else {
-                OutlinedButton(
-                    onClick = { viewModel.stopCapture() },
+            }
+
+            // Status card (shown when service is enabled)
+            if (state.isServiceEnabled) {
+                Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
+                    colors = CardDefaults.cardColors(
+                        containerColor = when (state.captureState) {
+                            CaptureState.Capturing -> MaterialTheme.colorScheme.primaryContainer
+                            CaptureState.PausedBlockedApp,
+                            CaptureState.PausedBatterySaver,
+                            CaptureState.PausedLowBattery,
+                            CaptureState.PausedManual -> MaterialTheme.colorScheme.tertiaryContainer
+                            CaptureState.Stopped, CaptureState.Idle -> MaterialTheme.colorScheme.surfaceVariant
+                        }
                     )
                 ) {
-                    Icon(Icons.Default.Stop, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Stop Capture")
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = when (state.captureState) {
+                                CaptureState.Capturing -> Icons.Default.CameraAlt
+                                CaptureState.PausedBlockedApp -> Icons.Default.Block
+                                CaptureState.PausedBatterySaver -> Icons.Default.BatterySaver
+                                CaptureState.PausedLowBattery -> Icons.Default.BatteryAlert
+                                CaptureState.PausedManual -> Icons.Default.Pause
+                                CaptureState.Stopped, CaptureState.Idle -> Icons.Default.CameraAlt
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = when (state.captureState) {
+                                CaptureState.Capturing -> "Capturing"
+                                CaptureState.PausedBlockedApp -> "Paused \u2014 Blocked App"
+                                CaptureState.PausedBatterySaver -> "Paused \u2014 Battery Saver"
+                                CaptureState.PausedLowBattery -> "Paused \u2014 Low Battery"
+                                CaptureState.PausedManual -> "Paused"
+                                CaptureState.Stopped -> "Stopped"
+                                CaptureState.Idle -> "Ready"
+                            },
+                            style = MaterialTheme.typography.titleLarge
+                        )
+
+                        if (state.queueSize > 0) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "${state.queueSize} screenshots queued",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                // Control buttons
+                when (state.captureState) {
+                    CaptureState.Idle, CaptureState.Stopped -> {
+                        Button(
+                            onClick = { viewModel.startCapture() },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Start Capture")
+                        }
+                    }
+                    CaptureState.PausedManual -> {
+                        Button(
+                            onClick = { viewModel.startCapture() },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Resume Capture")
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.stopCapture() },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Icon(Icons.Default.Stop, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Stop Capture")
+                        }
+                    }
+                    else -> {
+                        OutlinedButton(
+                            onClick = { viewModel.stopCapture() },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Icon(Icons.Default.Stop, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Stop Capture")
+                        }
+                    }
                 }
             }
 

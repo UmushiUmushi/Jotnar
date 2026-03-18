@@ -35,6 +35,33 @@ fun UploadQueueScreen(
     onNavigateBack: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
+    var showDeleteAllDialog by remember { mutableStateOf(false) }
+
+    if (showDeleteAllDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteAllDialog = false },
+            title = { Text("Delete all screenshots?") },
+            text = { Text("This will remove ${state.items.size} screenshots from the upload queue. They will not be sent to the server.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteAll()
+                        showDeleteAllDialog = false
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Delete All")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteAllDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -46,6 +73,12 @@ fun UploadQueueScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { showDeleteAllDialog = true },
+                        enabled = state.items.isNotEmpty() && !state.isUploading
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete all")
+                    }
                     IconButton(
                         onClick = { viewModel.uploadNow() },
                         enabled = state.items.isNotEmpty() && !state.isUploading

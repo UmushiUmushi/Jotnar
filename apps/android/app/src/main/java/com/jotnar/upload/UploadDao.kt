@@ -35,4 +35,7 @@ interface UploadDao {
 
     @Query("DELETE FROM upload_queue WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM upload_queue")
+    suspend fun deleteAll()
 }

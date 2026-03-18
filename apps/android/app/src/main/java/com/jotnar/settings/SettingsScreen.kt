@@ -11,8 +11,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -52,13 +57,12 @@ fun SettingsScreen(
             item { SectionHeader("Capture") }
 
             item {
-                SliderSetting(
+                NumericFieldSetting(
                     label = "Capture interval",
-                    value = state.captureIntervalSec.toFloat(),
-                    valueRange = 5f..60f,
-                    steps = 10,
-                    valueLabel = "${state.captureIntervalSec}s",
-                    onValueChange = { viewModel.setCaptureInterval(it.toInt()) }
+                    value = state.captureIntervalSec,
+                    suffix = "s",
+                    onValueChange = { viewModel.setCaptureInterval(it) },
+                    valueRange = 1..300
                 )
             }
 
@@ -157,22 +161,21 @@ fun SettingsScreen(
                 }
 
                 item {
-                    SliderSetting(
-                        label = "Consolidation window",
-                        value = config.consolidationWindowMin.toFloat(),
-                        valueRange = 10f..120f,
-                        steps = 10,
-                        valueLabel = "${config.consolidationWindowMin} min",
-                        onValueChange = {
-                            viewModel.updateServerConfig(consolidationWindowMin = it.toInt())
-                        }
+                    TimezoneDropdownSetting(
+                        value = config.timezone,
+                        onValueChange = { viewModel.updateServerConfig(timezone = it) }
                     )
                 }
 
                 item {
-                    TimezoneDropdownSetting(
-                        value = config.timezone,
-                        onValueChange = { viewModel.updateServerConfig(timezone = it) }
+                    NumericFieldSetting(
+                        label = "Consolidation window",
+                        value = config.consolidationWindowMin,
+                        suffix = "min",
+                        onValueChange = {
+                            viewModel.updateServerConfig(consolidationWindowMin = it)
+                        },
+                        valueRange = 1..1440
                     )
                 }
             }
@@ -361,7 +364,11 @@ private fun DropdownSetting(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = Modifier.padding(horizontal = 16.dp)
+    ) {
         OutlinedTextField(
             value = value.replaceFirstChar { it.uppercase() },
             onValueChange = { },
@@ -371,16 +378,16 @@ private fun DropdownSetting(
             modifier = Modifier
                 .fillMaxWidth()
                 .menuAnchor()
-                .padding(horizontal = 16.dp)
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { option ->
                 DropdownMenuItem(
                     text = { Text(option.replaceFirstChar { it.uppercase() }) },
                     onClick = {
-                        onValueChange(option)
                         expanded = false
-                    }
+                        if (option != value) onValueChange(option)
+                    },
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
                 )
             }
         }
@@ -401,7 +408,11 @@ private fun TimezoneDropdownSetting(
         else allTimezones.filter { it.contains(searchQuery, ignoreCase = true) }
     }
 
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = Modifier.padding(horizontal = 16.dp)
+    ) {
         OutlinedTextField(
             value = value,
             onValueChange = { },
@@ -411,7 +422,6 @@ private fun TimezoneDropdownSetting(
             modifier = Modifier
                 .fillMaxWidth()
                 .menuAnchor()
-                .padding(horizontal = 16.dp)
         )
         ExposedDropdownMenu(
             expanded = expanded,
@@ -436,7 +446,8 @@ private fun TimezoneDropdownSetting(
                         onValueChange(tz)
                         expanded = false
                         searchQuery = ""
-                    }
+                    },
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
                 )
             }
         }
@@ -446,8 +457,6 @@ private fun TimezoneDropdownSetting(
 @Composable
 private fun ThemeModeSelector(current: ThemeMode, onSelect: (ThemeMode) -> Unit) {
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        Text("Theme mode", style = MaterialTheme.typography.bodyLarge)
-        Spacer(modifier = Modifier.height(8.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -463,12 +472,58 @@ private fun ThemeModeSelector(current: ThemeMode, onSelect: (ThemeMode) -> Unit)
                                 ThemeMode.Dark -> "Dark"
                                 ThemeMode.MaterialYou -> "Dynamic"
                             },
-                            style = MaterialTheme.typography.labelSmall
+                            style = MaterialTheme.typography.labelLarge
                         )
                     }
                 )
             }
         }
     }
+}
+
+@Composable
+private fun NumericFieldSetting(
+    label: String,
+    value: Int,
+    suffix: String,
+    onValueChange: (Int) -> Unit,
+    valueRange: IntRange
+) {
+    var textValue by remember(value) { mutableStateOf(value.toString()) }
+    val focusManager = LocalFocusManager.current
+
+    fun commitValue() {
+        val parsed = textValue.toIntOrNull()
+        if (parsed != null && parsed in valueRange) {
+            onValueChange(parsed)
+        } else {
+            textValue = value.toString()
+        }
+    }
+
+    ListItem(
+        headlineContent = { Text(label) },
+        trailingContent = {
+            OutlinedTextField(
+                value = textValue,
+                onValueChange = { newText ->
+                    if (newText.all { it.isDigit() }) {
+                        textValue = newText
+                    }
+                },
+                suffix = { Text(suffix, style = MaterialTheme.typography.bodyLarge) },
+                textStyle = MaterialTheme.typography.bodyLarge,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                keyboardActions = KeyboardActions(onDone = {
+                    commitValue()
+                    focusManager.clearFocus()
+                }),
+                modifier = Modifier
+                    .width(100.dp)
+                    .onFocusChanged { if (!it.isFocused) commitValue() }
+            )
+        }
+    )
 }
 

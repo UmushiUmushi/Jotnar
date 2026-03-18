@@ -157,6 +157,10 @@ class UploadRepository @Inject constructor(
         uploadDao.deleteById(id)
     }
 
+    suspend fun clearQueue() {
+        uploadDao.deleteAll()
+    }
+
     suspend fun getScreenshot(id: String): PendingScreenshot? {
         return uploadDao.getById(id)
     }

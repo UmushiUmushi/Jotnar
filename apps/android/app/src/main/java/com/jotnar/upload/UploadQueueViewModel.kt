@@ -76,6 +76,12 @@ class UploadQueueViewModel @Inject constructor(
         }
     }
 
+    fun deleteAll() {
+        viewModelScope.launch {
+            uploadRepository.clearQueue()
+        }
+    }
+
     fun clearError() {
         _error.value = null
     }

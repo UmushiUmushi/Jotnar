@@ -61,10 +61,10 @@ class JournalListViewModel @Inject constructor(
                     }
                 }
                 is ApiResult.Error -> {
-                    _uiState.update { it.copy(isLoading = false, error = result.message) }
+                    _uiState.update { it.copy(isLoading = false, hasMore = false, error = result.message) }
                 }
                 is ApiResult.NetworkError -> {
-                    _uiState.update { it.copy(isLoading = false, error = "Network error") }
+                    _uiState.update { it.copy(isLoading = false, hasMore = false, error = "Network error") }
                 }
             }
         }
@@ -92,10 +92,10 @@ class JournalListViewModel @Inject constructor(
                     }
                 }
                 is ApiResult.Error -> {
-                    _uiState.update { it.copy(isLoadingMore = false, error = result.message) }
+                    _uiState.update { it.copy(isLoadingMore = false, hasMore = false, error = result.message) }
                 }
                 is ApiResult.NetworkError -> {
-                    _uiState.update { it.copy(isLoadingMore = false, error = "Network error") }
+                    _uiState.update { it.copy(isLoadingMore = false, hasMore = false, error = "Network error") }
                 }
             }
         }
@@ -103,7 +103,7 @@ class JournalListViewModel @Inject constructor(
 
     fun refresh() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isRefreshing = true, error = null) }
+            _uiState.update { it.copy(isRefreshing = true, error = null, hasMore = false) }
             when (val result = journalRepository.getEntries(limit = pageSize, offset = 0)) {
                 is ApiResult.Success -> {
                     _uiState.update {
