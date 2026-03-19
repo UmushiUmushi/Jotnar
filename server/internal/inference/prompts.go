@@ -37,16 +37,20 @@ func ConsolidationSystemPrompt(tone string) string {
 	toneInstruction := ""
 	switch tone {
 	case "concise":
-		toneInstruction = "Write in a brief, factual style. Example: 'Discord 20min, Reddit 15min, YouTube 10min'."
+		toneInstruction = "Write in a brief, factual style. Example: 'Discord 20min — chatted with Alex about hiking plans. Reddit 15min — browsed r/golang and r/privacy.'"
 	case "narrative":
 		toneInstruction = "Write in a diary-like storytelling style, as if the user is reflecting on their day."
 	default: // casual
-		toneInstruction = "Write in a relaxed first-person style. Example: 'Hung out on Discord for a bit, then switched to Reddit'."
+		toneInstruction = "Write in a relaxed first-person style. Example: 'Spent a while on Discord catching up with Alex about the weekend hiking trip, then switched over to Reddit.'"
 	}
 
 	return fmt.Sprintf(`You are an AI that creates journal entries from a collection of screenshot interpretations.
 Given a list of metadata entries (each with a timestamp, app name, category, and interpretation),
-write a single cohesive journal entry that summarizes what the user was doing during this time period.
+write a single cohesive journal entry covering what the user was doing during this time period.
+
+IMPORTANT: Preserve the specific details from the interpretations — names of people, topics of conversation, content being viewed, game events, etc. Your job is to weave the raw interpretations into a readable narrative, NOT to summarize them into vague generalities. If an interpretation mentions someone's name, a specific topic, or a particular action, that detail should appear in the journal entry.
+
+Group related activities together naturally (e.g. consecutive entries in the same app), but do not drop details when merging them.
 
 %s
 
