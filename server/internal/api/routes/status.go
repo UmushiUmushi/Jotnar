@@ -16,12 +16,12 @@ type StatusResponse struct {
 }
 
 type StatusHandler struct {
-	inferenceClient *inference.Client
+	inferenceClient inference.Client
 	deviceStore     *store.DeviceStore
 	version         string
 }
 
-func NewStatusHandler(client *inference.Client, devices *store.DeviceStore, version string) *StatusHandler {
+func NewStatusHandler(client inference.Client, devices *store.DeviceStore, version string) *StatusHandler {
 	return &StatusHandler{inferenceClient: client, deviceStore: devices, version: version}
 }
 

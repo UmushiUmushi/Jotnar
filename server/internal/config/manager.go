@@ -82,6 +82,16 @@ func (m *Manager) Get() ServerConfig {
 	return m.config
 }
 
+// Location returns the *time.Location for the configured timezone.
+// Falls back to UTC if the timezone string is invalid.
+func (c *ServerConfig) Location() *time.Location {
+	loc, err := time.LoadLocation(c.Timezone)
+	if err != nil {
+		return time.UTC
+	}
+	return loc
+}
+
 func (m *Manager) Update(cfg ServerConfig) error {
 	if err := cfg.Validate(); err != nil {
 		return err

@@ -21,7 +21,7 @@ type Dependencies struct {
 	PairingService *auth.PairingService
 	RecoveryService *auth.RecoveryService
 	ConfigManager  *config.Manager
-	InferenceClient *inference.Client
+	InferenceClient inference.Client
 	JournalStore   *store.JournalStore
 	MetadataStore  *store.MetadataStore
 	DeviceStore    *store.DeviceStore

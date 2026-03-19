@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.jotnar.network.ApiResult
 import com.jotnar.network.models.JournalEntryResponse
 import com.jotnar.network.models.MetadataResponse
+import com.jotnar.settings.TimezoneProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.ZoneId
 import javax.inject.Inject
 
 data class EditEntryUiState(
@@ -28,19 +30,21 @@ data class EditEntryUiState(
     val saved: Boolean = false,
     val showSaveConfirmation: Boolean = false,
     val hasMetadataChanges: Boolean = false,
-    val hasNarrativeChanges: Boolean = false
+    val hasNarrativeChanges: Boolean = false,
+    val zoneId: ZoneId = ZoneId.of("UTC")
 )
 
 @HiltViewModel
 class EditEntryViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val journalRepository: JournalRepository,
-    private val metadataRepository: MetadataRepository
+    private val metadataRepository: MetadataRepository,
+    private val timezoneProvider: TimezoneProvider
 ) : ViewModel() {
 
     private val entryId: String = savedStateHandle["id"] ?: ""
 
-    private val _uiState = MutableStateFlow(EditEntryUiState())
+    private val _uiState = MutableStateFlow(EditEntryUiState(zoneId = timezoneProvider.zoneId))
     val uiState: StateFlow<EditEntryUiState> = _uiState.asStateFlow()
 
     private var debounceJob: Job? = null

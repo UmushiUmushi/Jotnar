@@ -21,6 +21,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.jotnar.network.models.MetadataResponse
 import com.jotnar.ui.components.ConfirmationDialog
 import java.time.OffsetDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
@@ -154,6 +155,7 @@ fun EditEntryScreen(
                 val isIncluded = state.toggleStates[meta.id] ?: true
                 MetadataRow(
                     metadata = meta,
+                    zoneId = state.zoneId,
                     isIncluded = isIncluded,
                     onToggle = { viewModel.toggleMetadata(meta.id) }
                 )
@@ -190,6 +192,7 @@ fun EditEntryScreen(
 @Composable
 private fun MetadataRow(
     metadata: MetadataResponse,
+    zoneId: ZoneId,
     isIncluded: Boolean,
     onToggle: () -> Unit
 ) {
@@ -222,7 +225,7 @@ private fun MetadataRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = formatTimestamp(metadata.capturedAt),
+                        text = formatTimestamp(metadata.capturedAt, zoneId),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
                     )
@@ -272,9 +275,9 @@ private fun MetadataRow(
     }
 }
 
-private fun formatTimestamp(timestamp: String): String {
+private fun formatTimestamp(timestamp: String, zoneId: ZoneId): String {
     return try {
-        val dt = OffsetDateTime.parse(timestamp)
+        val dt = OffsetDateTime.parse(timestamp).atZoneSameInstant(zoneId)
         dt.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
     } catch (_: Exception) {
         timestamp

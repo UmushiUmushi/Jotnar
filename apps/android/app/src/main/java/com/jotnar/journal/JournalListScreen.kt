@@ -28,6 +28,7 @@ import com.jotnar.network.models.JournalEntryResponse
 import com.jotnar.ui.components.ConfirmationDialog
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle as JavaTextStyle
 import java.util.Locale
@@ -147,10 +148,12 @@ fun JournalListScreen(
                     }
                 }
             } else {
-                val groupedEntries = remember(state.entries) {
+                val groupedEntries = remember(state.entries, state.zoneId) {
                     state.entries.groupBy { entry ->
                         try {
-                            OffsetDateTime.parse(entry.timeStart).toLocalDate()
+                            OffsetDateTime.parse(entry.timeStart)
+                                .atZoneSameInstant(state.zoneId)
+                                .toLocalDate()
                         } catch (_: Exception) {
                             LocalDate.now()
                         }
@@ -165,12 +168,13 @@ fun JournalListScreen(
                 ) {
                     groupedEntries.forEach { (date, entries) ->
                         item(key = "header-$date") {
-                            DateHeader(date)
+                            DateHeader(date, state.zoneId)
                         }
 
                         items(entries, key = { it.id }) { entry ->
                             JournalEntryCard(
                                 entry = entry,
+                                zoneId = state.zoneId,
                                 isExpanded = state.expandedEntryId == entry.id,
                                 isBatchSelectMode = state.isBatchSelectMode,
                                 isSelected = entry.id in state.selectedEntryIds,
@@ -237,8 +241,8 @@ fun JournalListScreen(
 }
 
 @Composable
-private fun DateHeader(date: LocalDate) {
-    val today = LocalDate.now()
+private fun DateHeader(date: LocalDate, zoneId: ZoneId) {
+    val today = LocalDate.now(zoneId)
     val yesterday = today.minusDays(1)
 
     val label = when (date) {
@@ -277,6 +281,7 @@ private fun DateHeader(date: LocalDate) {
 @Composable
 private fun JournalEntryCard(
     entry: JournalEntryResponse,
+    zoneId: ZoneId,
     isExpanded: Boolean,
     isBatchSelectMode: Boolean,
     isSelected: Boolean,
@@ -309,7 +314,7 @@ private fun JournalEntryCard(
             Text(
                 text = buildAnnotatedString {
                     withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold, fontSize = MaterialTheme.typography.titleSmall.fontSize)) {
-                        append(formatStartTime(entry.timeStart))
+                        append(formatStartTime(entry.timeStart, zoneId))
                     }
                     append("  ")
                     append(entry.narrative)
@@ -387,9 +392,9 @@ private fun JournalEntryCard(
     }
 }
 
-private fun formatStartTime(startStr: String): String {
+private fun formatStartTime(startStr: String, zoneId: ZoneId): String {
     return try {
-        val start = OffsetDateTime.parse(startStr)
+        val start = OffsetDateTime.parse(startStr).atZoneSameInstant(zoneId)
         val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
         start.format(timeFormatter)
     } catch (_: Exception) {

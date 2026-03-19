@@ -14,13 +14,13 @@ import (
 )
 
 type Consolidator struct {
-	client   *inference.Client
+	client   inference.Client
 	config   *config.Manager
 	metadata *store.MetadataStore
 	journal  *store.JournalStore
 }
 
-func NewConsolidator(client *inference.Client, cfg *config.Manager, metadata *store.MetadataStore, journal *store.JournalStore) *Consolidator {
+func NewConsolidator(client inference.Client, cfg *config.Manager, metadata *store.MetadataStore, journal *store.JournalStore) *Consolidator {
 	return &Consolidator{client: client, config: cfg, metadata: metadata, journal: journal}
 }
 
@@ -37,6 +37,7 @@ func (c *Consolidator) Run() error {
 	log.Printf("Consolidation: found %d unconsolidated metadata rows", len(rows))
 
 	cfg := c.config.Get()
+	loc := cfg.Location()
 	window := time.Duration(cfg.ConsolidationWindowMin) * time.Minute
 
 	// Group metadata into time windows
@@ -45,8 +46,8 @@ func (c *Consolidator) Run() error {
 	for i, batch := range batches {
 		log.Printf("Consolidation: processing batch %d/%d (%d rows, %s to %s)",
 			i+1, len(batches), len(batch),
-			batch[0].CapturedAt.Format("15:04"),
-			batch[len(batch)-1].CapturedAt.Format("15:04"))
+			batch[0].CapturedAt.In(loc).Format("15:04"),
+			batch[len(batch)-1].CapturedAt.In(loc).Format("15:04"))
 		if err := c.consolidateBatch(batch, cfg.JournalTone); err != nil {
 			return err
 		}
@@ -57,16 +58,16 @@ func (c *Consolidator) Run() error {
 }
 
 func (c *Consolidator) consolidateBatch(batch []store.Metadata, tone string) error {
-	prompt := formatMetadataForPrompt(batch)
+	cfg := c.config.Get()
+	prompt := formatMetadataForPrompt(batch, cfg.Location())
 
 	req := inference.ChatRequest{
 		Messages: []inference.Message{
 			{Role: "system", Content: inference.ConsolidationSystemPrompt(tone)},
 			{Role: "user", Content: prompt},
 		},
-		Temperature: 0.5,
-		MaxTokens:   2048,
-		Think:       inference.BoolPtr(false),
+		Temperature: 0.7,
+		MaxTokens:   1000,
 	}
 
 	narrative, err := c.client.Complete(req)
@@ -99,16 +100,16 @@ func (c *Consolidator) consolidateBatch(batch []store.Metadata, tone string) err
 
 // SoftConsolidate creates a narrative from the given metadata rows without saving.
 func (c *Consolidator) SoftConsolidate(rows []store.Metadata, tone string) (string, error) {
-	prompt := formatMetadataForPrompt(rows)
+	cfg := c.config.Get()
+	prompt := formatMetadataForPrompt(rows, cfg.Location())
 
 	req := inference.ChatRequest{
 		Messages: []inference.Message{
 			{Role: "system", Content: inference.ConsolidationSystemPrompt(tone)},
 			{Role: "user", Content: prompt},
 		},
-		Temperature: 0.5,
-		MaxTokens:   2048,
-		Think:       inference.BoolPtr(false),
+		Temperature: 0.7,
+		MaxTokens:   1000,
 	}
 
 	narrative, err := c.client.Complete(req)
@@ -142,11 +143,11 @@ func groupByWindow(rows []store.Metadata, window time.Duration) [][]store.Metada
 	return batches
 }
 
-func formatMetadataForPrompt(rows []store.Metadata) string {
+func formatMetadataForPrompt(rows []store.Metadata, loc *time.Location) string {
 	var sb strings.Builder
 	for _, m := range rows {
 		sb.WriteString(fmt.Sprintf("[%s] %s (%s): %s\n",
-			m.CapturedAt.Format("15:04:05"),
+			m.CapturedAt.In(loc).Format("15:04:05"),
 			m.AppName,
 			m.Category,
 			m.Interpretation,

@@ -22,11 +22,12 @@ services:
       - jotnar-data:/data
     environment:
       - INFERENCE_HOST=${INFERENCE_HOST:-http://sglang:8000}
-      - INFERENCE_TIMEOUT_SEC=120
-      - INFERENCE_MAX_RETRIES=3
+      - INFERENCE_TIMEOUT_SEC=${INFERENCE_TIMEOUT_SEC:-120}
+      - INFERENCE_MAX_RETRIES=${INFERENCE_MAX_RETRIES:-3}
+      - INFERENCE_BACKEND=${INFERENCE_BACKEND:-openai}
       - INFERENCE_WORKERS=${INFERENCE_WORKERS:-4}
-      - JOTNAR_DB_PATH=/data/journal.db
-      - JOTNAR_CONFIG_PATH=/data/config.yml
+      - JOTNAR_DB_PATH=${JOTNAR_DB_PATH:-/data/journal.db}
+      - JOTNAR_CONFIG_PATH=${JOTNAR_CONFIG_PATH:-/data/config.yml}
     depends_on:
       - sglang
     restart: unless-stopped
@@ -107,11 +108,12 @@ services:
       - jotnar-data:/data
     environment:
       - INFERENCE_HOST=${INFERENCE_HOST:-http://host.docker.internal:11434}
-      - INFERENCE_TIMEOUT_SEC=300
-      - INFERENCE_MAX_RETRIES=3
+      - INFERENCE_TIMEOUT_SEC=${INFERENCE_TIMEOUT_SEC:-300}
+      - INFERENCE_MAX_RETRIES=${INFERENCE_MAX_RETRIES:-3}
+      - INFERENCE_BACKEND=${INFERENCE_BACKEND:-ollama}
       - INFERENCE_WORKERS=${INFERENCE_WORKERS:-1}
-      - JOTNAR_DB_PATH=/data/journal.db
-      - JOTNAR_CONFIG_PATH=/data/config.yml
+      - JOTNAR_DB_PATH=${JOTNAR_DB_PATH:-/data/journal.db}
+      - JOTNAR_CONFIG_PATH=${JOTNAR_CONFIG_PATH:-/data/config.yml}
     restart: unless-stopped
 
 volumes:
@@ -132,14 +134,23 @@ docker compose up -d
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `INFERENCE_HOST` | `http://sglang:8000` (full) / `http://host.docker.internal:11434` (server-only) | Inference backend URL |
-| `INFERENCE_TIMEOUT_SEC` | `120` (full) / `300` (server-only) | HTTP timeout for inference requests |
-| `INFERENCE_MAX_RETRIES` | `3` | Retry attempts for transient inference failures |
-| `INFERENCE_WORKERS` | `4` (full) / `1` (server-only) | Concurrent interpretation workers. With SGLang, higher values enable GPU batching. With Ollama, keep at 1. |
-| `JOTNAR_DB_PATH` | `/data/journal.db` | SQLite database path |
-| `JOTNAR_CONFIG_PATH` | `/data/config.yml` | Server config file path |
+All environment variables can be overridden via a `.env` file in the same directory as the compose file, or by setting them in your shell. The compose files use `${VAR:-default}` syntax, so the defaults shown below apply if unset. The Go server also has internal fallback defaults, so the binary works without any env vars at all.
+
+| Variable | Default (full) | Default (server-only) | Description |
+|----------|---------------|----------------------|-------------|
+| `INFERENCE_HOST` | `http://sglang:8000` | `http://host.docker.internal:11434` | Inference backend URL |
+| `INFERENCE_TIMEOUT_SEC` | `120` | `300` | HTTP timeout (seconds) for inference requests |
+| `INFERENCE_MAX_RETRIES` | `3` | `3` | Retry attempts for transient inference failures |
+| `INFERENCE_BACKEND` | `openai` | `ollama` | Backend type (`openai` or `ollama`). If unset, auto-detected by probing the server. |
+| `INFERENCE_WORKERS` | `4` | `1` | Concurrent interpretation workers. With SGLang, higher values enable GPU batching. With Ollama, keep at 1. |
+| `JOTNAR_DB_PATH` | `/data/journal.db` | `/data/journal.db` | SQLite database path |
+| `JOTNAR_CONFIG_PATH` | `/data/config.yml` | `/data/config.yml` | Server config file path |
+
+To customize, copy the `.env.example` next to your compose file and edit as needed:
+
+```bash
+cp .env.example .env
+```
 
 ## Pairing Additional Devices
 

@@ -9,8 +9,13 @@ import (
 	"testing"
 )
 
-func newMockInferenceServer(handler http.HandlerFunc) (*httptest.Server, *Client) {
+func newMockInferenceServer(handler http.HandlerFunc) (*httptest.Server, Client) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Reject Ollama probe so auto-detection picks OpenAI
+		if r.URL.Path == "/api/tags" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		// Handle model detection during NewClient without hitting the test handler
 		if r.URL.Path == "/v1/models" {
 			w.Header().Set("Content-Type", "application/json")
@@ -28,7 +33,7 @@ func newMockInferenceServer(handler http.HandlerFunc) (*httptest.Server, *Client
 }
 
 func chatResponseJSON(content string) []byte {
-	resp := ChatResponse{
+	resp := openAIChatResponse{
 		Choices: []struct {
 			Message struct {
 				Content   string `json:"content"`

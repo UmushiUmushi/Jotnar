@@ -41,6 +41,10 @@ func testConfig(t *testing.T) *config.Manager {
 
 func mockInferenceServer(response string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/tags" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		if r.URL.Path == "/v1/models" {
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(`{"data":[{"id":"test-model"}]}`))
@@ -166,7 +170,7 @@ func TestFormatMetadataForPrompt(t *testing.T) {
 			Interpretation: "Reading r/golang",
 		},
 	}
-	result := formatMetadataForPrompt(rows)
+	result := formatMetadataForPrompt(rows, time.UTC)
 	if !strings.Contains(result, "14:30:00") {
 		t.Error("should contain timestamp 14:30:00")
 	}

@@ -24,12 +24,12 @@ import (
 const maxImageWidth = 720
 
 type Interpreter struct {
-	client   *inference.Client
+	client   inference.Client
 	config   *config.Manager
 	metadata *store.MetadataStore
 }
 
-func NewInterpreter(client *inference.Client, cfg *config.Manager, metadata *store.MetadataStore) *Interpreter {
+func NewInterpreter(client inference.Client, cfg *config.Manager, metadata *store.MetadataStore) *Interpreter {
 	return &Interpreter{client: client, config: cfg, metadata: metadata}
 }
 
@@ -46,12 +46,11 @@ func (i *Interpreter) Interpret(imageData []byte, deviceID string, capturedAt ti
 			{Role: "system", Content: inference.InterpretationSystemPrompt(cfg.InterpretationDetail)},
 			{Role: "user", Content: []map[string]any{
 				{"type": "image_url", "image_url": map[string]string{"url": "data:image/png;base64," + b64Image}},
-				{"type": "text", "text": fmt.Sprintf("Device: %s, Captured at: %s", deviceID, capturedAt.Format(time.RFC3339))},
+				{"type": "text", "text": fmt.Sprintf("Device: %s, Captured at: %s", deviceID, capturedAt.In(cfg.Location()).Format(time.RFC3339))},
 			}},
 		},
 		Temperature: 0.3,
-		MaxTokens:   2048,
-		Think:       inference.BoolPtr(false),
+		MaxTokens:   1000,
 	}
 
 	raw, err := i.client.Complete(req)

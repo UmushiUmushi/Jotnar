@@ -4,12 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jotnar.network.ApiResult
 import com.jotnar.network.models.JournalEntryResponse
+import com.jotnar.settings.SettingsRepository
+import com.jotnar.settings.TimezoneProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.ZoneId
 import javax.inject.Inject
 
 data class JournalListUiState(
@@ -29,21 +32,37 @@ data class JournalListUiState(
     // Confirmation dialog
     val showDeleteConfirmation: Boolean = false,
     val deleteTargetEntry: JournalEntryResponse? = null,
-    val total: Int = 0
+    val total: Int = 0,
+    val zoneId: ZoneId = ZoneId.of("UTC")
 )
 
 @HiltViewModel
 class JournalListViewModel @Inject constructor(
-    private val journalRepository: JournalRepository
+    private val journalRepository: JournalRepository,
+    private val settingsRepository: SettingsRepository,
+    private val timezoneProvider: TimezoneProvider
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(JournalListUiState())
+    private val _uiState = MutableStateFlow(JournalListUiState(zoneId = timezoneProvider.zoneId))
     val uiState: StateFlow<JournalListUiState> = _uiState.asStateFlow()
 
     private val pageSize = 20
 
     init {
+        loadTimezone()
         loadEntries()
+    }
+
+    private fun loadTimezone() {
+        viewModelScope.launch {
+            when (val result = settingsRepository.getServerConfig()) {
+                is ApiResult.Success -> {
+                    timezoneProvider.update(result.data.timezone)
+                    _uiState.update { it.copy(zoneId = timezoneProvider.zoneId) }
+                }
+                else -> { /* keep default */ }
+            }
+        }
     }
 
     fun loadEntries() {

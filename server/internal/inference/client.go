@@ -1,11 +1,8 @@
-// OpenAI-compatible API client for SGLang.
+// Inference client interface and factory.
 package inference
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"io"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -13,43 +10,32 @@ import (
 	"time"
 )
 
-type Client struct {
-	httpClient *http.Client
-	baseURL    string
-	maxRetries int
-	model      string
-}
+// Client is the interface for all inference backends.
+// Any server that can take a chat completion request and return text
+// (SGLang, vLLM, Ollama, OpenAI, Anthropic proxy, etc.) implements this.
+type Client interface {
+	// Complete sends a chat request and returns the model's text response.
+	Complete(req ChatRequest) (string, error)
 
-// modelsResponse is the OpenAI-compatible /v1/models response.
-type modelsResponse struct {
-	Data []struct {
-		ID string `json:"id"`
-	} `json:"data"`
+	// IsAvailable checks whether the inference server is reachable.
+	IsAvailable() bool
 }
 
 // Message represents a chat completion message.
+// Content is `any` to support both plain strings and the OpenAI
+// multimodal format ([]map[string]any with image_url / text parts).
 type Message struct {
 	Role    string `json:"role"`
 	Content any    `json:"content"`
 }
 
-// ChatRequest is the OpenAI-compatible chat completion request.
+// ChatRequest is the backend-agnostic request that callers build.
+// Each Client implementation translates it to its native wire format.
 type ChatRequest struct {
 	Model       string    `json:"model,omitempty"`
 	Messages    []Message `json:"messages"`
 	Temperature float64   `json:"temperature,omitempty"`
 	MaxTokens   int       `json:"max_tokens,omitempty"`
-	Think       *bool     `json:"think,omitempty"`
-}
-
-// ChatResponse is the OpenAI-compatible chat completion response.
-type ChatResponse struct {
-	Choices []struct {
-		Message struct {
-			Content   string `json:"content"`
-			Reasoning string `json:"reasoning"`
-		} `json:"message"`
-	} `json:"choices"`
 }
 
 // ClientConfig holds connection settings for the inference server.
@@ -63,7 +49,7 @@ type ClientConfig struct {
 // variables, falling back to sensible defaults:
 //
 //	INFERENCE_HOST        (default: http://localhost:8000)
-//	INFERENCE_TIMEOUT_SEC (default: 120)
+//	INFERENCE_TIMEOUT_SEC (default: 300)
 //	INFERENCE_MAX_RETRIES (default: 3)
 func DefaultClientConfig() ClientConfig {
 	host := os.Getenv("INFERENCE_HOST")
@@ -92,42 +78,41 @@ func DefaultClientConfig() ClientConfig {
 	}
 }
 
-func NewClient(cfg ClientConfig) *Client {
-	retries := cfg.MaxRetries
-	if retries <= 0 {
-		retries = 3
+// NewClient creates the appropriate Client implementation.
+// Uses INFERENCE_BACKEND env var ("ollama" or "openai") if set,
+// otherwise auto-detects by probing the server.
+func NewClient(cfg ClientConfig) Client {
+	backend := strings.ToLower(os.Getenv("INFERENCE_BACKEND"))
+
+	if backend == "" {
+		backend = detectBackend(cfg.Host)
 	}
-	c := &Client{
-		httpClient: &http.Client{Timeout: cfg.Timeout},
-		baseURL:    cfg.Host,
-		maxRetries: retries,
+
+	switch backend {
+	case "ollama":
+		log.Printf("[inference] using Ollama backend (%s)", cfg.Host)
+		return NewOllamaClient(cfg)
+	default:
+		log.Printf("[inference] using OpenAI-compatible backend (%s)", cfg.Host)
+		return NewOpenAIClient(cfg)
 	}
-	// Auto-detect model from the inference backend
-	c.model = c.detectModel()
-	return c
 }
 
-// detectModel queries /v1/models and returns the first available model ID.
-// Uses a short timeout so it doesn't block server startup.
-func (c *Client) detectModel() string {
+// detectBackend probes the server to determine its type.
+// If Ollama's /api/tags responds, it's Ollama; otherwise OpenAI-compatible.
+func detectBackend(host string) string {
 	client := &http.Client{Timeout: 5 * time.Second}
-	res, err := client.Get(c.baseURL + "/v1/models")
-	if err != nil {
-		return ""
+	res, err := client.Get(host + "/api/tags")
+	if err == nil {
+		res.Body.Close()
+		if res.StatusCode == http.StatusOK {
+			return "ollama"
+		}
 	}
-	defer res.Body.Close()
-
-	var models modelsResponse
-	if err := json.NewDecoder(res.Body).Decode(&models); err != nil {
-		return ""
-	}
-	if len(models.Data) > 0 {
-		return models.Data[0].ID
-	}
-	return ""
+	return "openai"
 }
 
-// isRetryable returns true for errors that are likely transient.
+// isRetryable returns true for HTTP status codes that are likely transient.
 func isRetryable(statusCode int) bool {
 	switch statusCode {
 	case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
@@ -137,88 +122,13 @@ func isRetryable(statusCode int) bool {
 	}
 }
 
-// BoolPtr returns a pointer to a bool value, for use with optional fields.
-func BoolPtr(v bool) *bool { return &v }
-
 // stripThinking removes <think>...</think> blocks from model output.
 // Reasoning models may wrap chain-of-thought in these tags; we only
-// want the actual answer that follows.
+// want the actual answer that follows. Kept as a safety net even when
+// thinking is explicitly disabled.
 func stripThinking(s string) string {
 	if idx := strings.Index(s, "</think>"); idx != -1 {
 		return strings.TrimSpace(s[idx+len("</think>"):])
 	}
-	// No think tags — return as-is (trimmed)
 	return strings.TrimSpace(s)
-}
-
-// Complete sends a chat completion request and returns the response text.
-// Retries transient failures with exponential backoff.
-func (c *Client) Complete(req ChatRequest) (string, error) {
-	if req.Model == "" && c.model != "" {
-		req.Model = c.model
-	}
-	body, err := json.Marshal(req)
-	if err != nil {
-		return "", fmt.Errorf("marshal request: %w", err)
-	}
-
-	var lastErr error
-	for attempt := range c.maxRetries {
-		if attempt > 0 {
-			time.Sleep(time.Duration(1<<uint(attempt-1)) * time.Second) // 1s, 2s, 4s...
-		}
-
-		res, err := c.httpClient.Post(
-			c.baseURL+"/v1/chat/completions",
-			"application/json",
-			bytes.NewReader(body),
-		)
-		if err != nil {
-			lastErr = fmt.Errorf("inference request: %w", err)
-			continue // network error — retry
-		}
-
-		if res.StatusCode != http.StatusOK {
-			respBody, _ := io.ReadAll(res.Body)
-			res.Body.Close()
-			lastErr = fmt.Errorf("inference returned %d: %s", res.StatusCode, string(respBody))
-			if isRetryable(res.StatusCode) {
-				continue
-			}
-			return "", lastErr // non-retryable HTTP error
-		}
-
-		respBody, _ := io.ReadAll(res.Body)
-		res.Body.Close()
-
-		var chatResp ChatResponse
-		if err := json.Unmarshal(respBody, &chatResp); err != nil {
-			return "", fmt.Errorf("decode response: %w", err)
-		}
-
-		if len(chatResp.Choices) == 0 {
-			return "", fmt.Errorf("no choices in response")
-		}
-
-		content := stripThinking(chatResp.Choices[0].Message.Content)
-		if content == "" {
-			content = stripThinking(chatResp.Choices[0].Message.Reasoning)
-		}
-		if content == "" {
-			return "", fmt.Errorf("inference returned empty content")
-		}
-		return content, nil
-	}
-
-	return "", fmt.Errorf("inference failed after %d attempts: %w", c.maxRetries, lastErr)
-}
-
-// IsAvailable checks if the inference server is reachable.
-func (c *Client) IsAvailable() bool {
-	res, err := c.httpClient.Get(c.baseURL + "/v1/models")
-	if err != nil {
-		return false
-	}
-	defer res.Body.Close()
-	return res.StatusCode == http.StatusOK
 }

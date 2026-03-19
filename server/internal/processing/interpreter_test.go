@@ -17,6 +17,10 @@ import (
 
 func mockInterpretationServer(interpretation, category, appName string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/tags" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		result := map[string]string{
 			"interpretation": interpretation,
 			"category":       category,
@@ -84,6 +88,10 @@ func TestInterpret_InferenceError(t *testing.T) {
 	cfg := testConfig(t)
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/tags" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("model error"))
 	}))
@@ -136,6 +144,10 @@ func TestInterpret_UsesConfigDetail(t *testing.T) {
 
 	var receivedBody []byte
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/tags" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		// Capture the request to verify prompt content.
 		buf := make([]byte, 4096)
 		n, _ := r.Body.Read(buf)

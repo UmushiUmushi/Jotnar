@@ -48,7 +48,8 @@ class SettingsViewModel @Inject constructor(
     private val devicePreferences: DevicePreferences,
     private val settingsRepository: SettingsRepository,
     private val authRepository: AuthRepository,
-    private val serverPreferences: ServerPreferences
+    private val serverPreferences: ServerPreferences,
+    private val timezoneProvider: TimezoneProvider
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(loadDeviceSettings())
@@ -80,6 +81,7 @@ class SettingsViewModel @Inject constructor(
             when (val result = settingsRepository.getServerConfig()) {
                 is ApiResult.Success -> {
                     val config = result.data
+                    timezoneProvider.update(config.timezone)
                     _uiState.update {
                         it.copy(serverConfig = config, isLoadingServerConfig = false)
                     }
@@ -185,6 +187,7 @@ class SettingsViewModel @Inject constructor(
             )
             when (val result = settingsRepository.updateServerConfig(request)) {
                 is ApiResult.Success -> {
+                    timezoneProvider.update(result.data.timezone)
                     _uiState.update {
                         it.copy(serverConfig = result.data, isSavingServerConfig = false)
                     }
