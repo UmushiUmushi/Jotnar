@@ -24,9 +24,8 @@ func newMockInferenceServer(handler http.HandlerFunc) (*httptest.Server, Client)
 		}
 		handler(w, r)
 	}))
-	client := NewClient(ClientConfig{
+	client := NewOpenAIClient(ClientConfig{
 		Host:       ts.URL,
-		Timeout:    0,
 		MaxRetries: 3,
 	})
 	return ts, client
@@ -147,7 +146,7 @@ func TestIsAvailable_True(t *testing.T) {
 }
 
 func TestIsAvailable_False(t *testing.T) {
-	client := NewClient(ClientConfig{
+	client := NewOpenAIClient(ClientConfig{
 		Host:       "http://127.0.0.1:1",
 		MaxRetries: 1,
 	})

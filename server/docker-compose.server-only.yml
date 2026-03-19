@@ -5,9 +5,10 @@
 ## Usage:
 ##   docker compose -f docker-compose.server-only.yml up
 ##
-## Set INFERENCE_HOST and INFERENCE_BACKEND to match your setup.
+## Set INFERENCE_HOST to match your setup. The backend type (Ollama vs OpenAI-compatible)
+## is auto-detected.
 ## For Ollama on the host machine:
-##   INFERENCE_HOST=http://host.docker.internal:11434 INFERENCE_BACKEND=ollama docker compose -f docker-compose.server-only.yml up
+##   INFERENCE_HOST=http://host.docker.internal:11434 docker compose -f docker-compose.server-only.yml up
 
 services:
   jotnar:
@@ -20,7 +21,6 @@ services:
       - INFERENCE_HOST=${INFERENCE_HOST:-http://host.docker.internal:11434}
       - INFERENCE_TIMEOUT_SEC=${INFERENCE_TIMEOUT_SEC:-300}
       - INFERENCE_MAX_RETRIES=${INFERENCE_MAX_RETRIES:-3}
-      - INFERENCE_BACKEND=${INFERENCE_BACKEND:-ollama}
       - INFERENCE_WORKERS=${INFERENCE_WORKERS:-1}
       - JOTNAR_DB_PATH=${JOTNAR_DB_PATH:-/data/journal.db}
       - JOTNAR_CONFIG_PATH=${JOTNAR_CONFIG_PATH:-/data/config.yml}

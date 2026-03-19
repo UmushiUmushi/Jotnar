@@ -196,7 +196,7 @@ func TestConsolidator_Run_CreatesEntry(t *testing.T) {
 	ts := mockInferenceServer("Spent some time browsing the web.")
 	defer ts.Close()
 
-	client := inference.NewClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
+	client := inference.NewOpenAIClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
 	metaStore := store.NewMetadataStore(db)
 	journalStore := store.NewJournalStore(db)
 	deviceID := insertTestDevice(t, db)
@@ -244,7 +244,7 @@ func TestConsolidator_Run_NoData(t *testing.T) {
 	ts := mockInferenceServer("should not be called")
 	defer ts.Close()
 
-	client := inference.NewClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
+	client := inference.NewOpenAIClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
 	metaStore := store.NewMetadataStore(db)
 	journalStore := store.NewJournalStore(db)
 
@@ -265,7 +265,7 @@ func TestConsolidator_Run_MultipleWindows(t *testing.T) {
 	ts := mockInferenceServer("A journal entry.")
 	defer ts.Close()
 
-	client := inference.NewClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
+	client := inference.NewOpenAIClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
 	metaStore := store.NewMetadataStore(db)
 	journalStore := store.NewJournalStore(db)
 	deviceID := insertTestDevice(t, db)
@@ -293,7 +293,7 @@ func TestConsolidator_SoftConsolidate(t *testing.T) {
 	ts := mockInferenceServer("Preview narrative only.")
 	defer ts.Close()
 
-	client := inference.NewClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
+	client := inference.NewOpenAIClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
 	metaStore := store.NewMetadataStore(db)
 	journalStore := store.NewJournalStore(db)
 

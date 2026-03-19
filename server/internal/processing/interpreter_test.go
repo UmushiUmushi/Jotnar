@@ -43,7 +43,7 @@ func TestInterpret_Success(t *testing.T) {
 	ts := mockInterpretationServer("Playing Genshin Impact", "gaming", "Genshin Impact")
 	defer ts.Close()
 
-	client := inference.NewClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
+	client := inference.NewOpenAIClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
 	metaStore := store.NewMetadataStore(db)
 	deviceID := insertTestDevice(t, db)
 
@@ -97,7 +97,7 @@ func TestInterpret_InferenceError(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := inference.NewClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
+	client := inference.NewOpenAIClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
 	metaStore := store.NewMetadataStore(db)
 	deviceID := insertTestDevice(t, db)
 
@@ -119,7 +119,7 @@ func TestInterpret_ParseError(t *testing.T) {
 	ts := mockInferenceServer("this is not JSON")
 	defer ts.Close()
 
-	client := inference.NewClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
+	client := inference.NewOpenAIClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
 	metaStore := store.NewMetadataStore(db)
 	deviceID := insertTestDevice(t, db)
 
@@ -169,7 +169,7 @@ func TestInterpret_UsesConfigDetail(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := inference.NewClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
+	client := inference.NewOpenAIClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
 	metaStore := store.NewMetadataStore(db)
 	deviceID := insertTestDevice(t, db)
 

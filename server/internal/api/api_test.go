@@ -60,7 +60,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	t.Cleanup(mockInference.Close)
 
 	cfgMgr, _ := config.NewManager(filepath.Join(t.TempDir(), "config.yml"))
-	infClient := inference.NewClient(inference.ClientConfig{Host: mockInference.URL, MaxRetries: 1})
+	infClient := inference.NewOpenAIClient(inference.ClientConfig{Host: mockInference.URL, MaxRetries: 1})
 
 	tokenService := auth.NewTokenService(db)
 	pairingService := auth.NewPairingService(db)

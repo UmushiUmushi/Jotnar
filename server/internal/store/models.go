@@ -36,3 +36,13 @@ type Recovery struct {
 	ID      int    `json:"id"`
 	KeyHash string `json:"-"`
 }
+
+// PendingCapture is a screenshot queued for interpretation that hasn't been
+// processed yet. Persisted to survive container restarts.
+type PendingCapture struct {
+	ID         string    `json:"id"`
+	DeviceID   string    `json:"device_id"`
+	ImageData  []byte    `json:"-"`
+	CapturedAt time.Time `json:"captured_at"`
+	CreatedAt  time.Time `json:"created_at"`
+}

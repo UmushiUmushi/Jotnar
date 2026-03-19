@@ -14,6 +14,10 @@ COPY --from=builder /build/jotnar /usr/local/bin/jotnar
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# Aliases so `docker exec jotnar updateinference` works (without repeating "jotnar").
+RUN printf '#!/bin/sh\nexec jotnar updateinference "$@"\n' > /usr/local/bin/updateinference && chmod +x /usr/local/bin/updateinference
+RUN printf '#!/bin/sh\nexec jotnar pairingcode "$@"\n' > /usr/local/bin/pairingcode && chmod +x /usr/local/bin/pairingcode
+
 EXPOSE 8910
 VOLUME /data
 ENTRYPOINT ["/entrypoint.sh"]

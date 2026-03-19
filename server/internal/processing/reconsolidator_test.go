@@ -35,7 +35,7 @@ func TestPreview_Success(t *testing.T) {
 	ts := mockInferenceServer("Preview narrative text.")
 	defer ts.Close()
 
-	client := inference.NewClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
+	client := inference.NewOpenAIClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
 	metaStore := store.NewMetadataStore(db)
 	journalStore := store.NewJournalStore(db)
 	deviceID := insertTestDevice(t, db)
@@ -71,7 +71,7 @@ func TestPreview_EmptyIDs(t *testing.T) {
 	ts := mockInferenceServer("should not be called")
 	defer ts.Close()
 
-	client := inference.NewClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
+	client := inference.NewOpenAIClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
 	metaStore := store.NewMetadataStore(db)
 	journalStore := store.NewJournalStore(db)
 
@@ -90,7 +90,7 @@ func TestCommit_DeletesExcluded(t *testing.T) {
 	ts := mockInferenceServer("Updated narrative.")
 	defer ts.Close()
 
-	client := inference.NewClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
+	client := inference.NewOpenAIClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
 	metaStore := store.NewMetadataStore(db)
 	journalStore := store.NewJournalStore(db)
 	deviceID := insertTestDevice(t, db)
@@ -132,7 +132,7 @@ func TestCommit_UpdatesTimeRange(t *testing.T) {
 	ts := mockInferenceServer("Narrative.")
 	defer ts.Close()
 
-	client := inference.NewClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
+	client := inference.NewOpenAIClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
 	metaStore := store.NewMetadataStore(db)
 	journalStore := store.NewJournalStore(db)
 	deviceID := insertTestDevice(t, db)
@@ -187,7 +187,7 @@ func TestCommit_WithProvidedNarrative(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := inference.NewClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
+	client := inference.NewOpenAIClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
 	metaStore := store.NewMetadataStore(db)
 	journalStore := store.NewJournalStore(db)
 	deviceID := insertTestDevice(t, db)
@@ -238,7 +238,7 @@ func TestCommit_WithoutNarrative_CallsInference(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := inference.NewClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
+	client := inference.NewOpenAIClient(inference.ClientConfig{Host: ts.URL, MaxRetries: 1})
 	metaStore := store.NewMetadataStore(db)
 	journalStore := store.NewJournalStore(db)
 	deviceID := insertTestDevice(t, db)

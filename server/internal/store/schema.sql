@@ -43,3 +43,11 @@ CREATE INDEX IF NOT EXISTS idx_metadata_entry_id ON metadata(entry_id);
 CREATE INDEX IF NOT EXISTS idx_metadata_captured_at ON metadata(captured_at);
 CREATE INDEX IF NOT EXISTS idx_metadata_device_id ON metadata(device_id);
 CREATE INDEX IF NOT EXISTS idx_metadata_unconsolidated ON metadata(captured_at) WHERE entry_id IS NULL;
+
+CREATE TABLE IF NOT EXISTS pending_captures (
+    id          TEXT PRIMARY KEY,
+    device_id   TEXT NOT NULL,
+    image_data  BLOB NOT NULL,
+    captured_at DATETIME NOT NULL,
+    created_at  DATETIME NOT NULL
+);

@@ -4,16 +4,17 @@ package main
 import (
 	"context"
 	"database/sql"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/jotnar/server/internal/admin"
 	"github.com/jotnar/server/internal/api"
 	"github.com/jotnar/server/internal/auth"
 	"github.com/jotnar/server/internal/config"
@@ -51,6 +52,60 @@ func cmdPairingCode() {
 	fmt.Println("============================================")
 }
 
+func cmdUpdateInference(args []string) {
+	fs := flag.NewFlagSet("updateinference", flag.ExitOnError)
+	host := fs.String("host", "", "Inference server URL")
+	workers := fs.Int("workers", 0, "Concurrent interpretation workers")
+	timeout := fs.Int("timeout", 0, "Inference timeout in seconds")
+	retries := fs.Int("retries", 0, "Max retry attempts for transient failures")
+	fs.Parse(args)
+
+	// Track which flags were explicitly set on the CLI.
+	flagsSet := make(map[string]bool)
+	fs.Visit(func(f *flag.Flag) { flagsSet[f.Name] = true })
+
+	var req admin.Request
+	req.Action = "update_inference"
+
+	if len(flagsSet) > 0 {
+		// Selective mode: only send fields the user explicitly passed.
+		// Zero/empty values in the request mean "don't change".
+		req.Host = *host
+		req.Workers = *workers
+		req.TimeoutSec = *timeout
+		req.MaxRetries = *retries
+
+		fmt.Println("Updating inference configuration (from flags)...")
+	} else {
+		// No flags: reload everything from environment.
+		cfg := inference.DefaultClientConfig()
+		req.Host = cfg.Host
+		req.TimeoutSec = int(cfg.Timeout.Seconds())
+		req.MaxRetries = cfg.MaxRetries
+		req.Workers = inference.DefaultWorkers()
+
+		fmt.Println("Updating inference configuration (from environment)...")
+	}
+
+	if req.Host != "" {
+		fmt.Printf("  Host:       %s\n", req.Host)
+	}
+	if req.Workers > 0 {
+		fmt.Printf("  Workers:    %d\n", req.Workers)
+	}
+	if req.TimeoutSec > 0 {
+		fmt.Printf("  Timeout:    %ds\n", req.TimeoutSec)
+	}
+	if req.MaxRetries > 0 {
+		fmt.Printf("  MaxRetries: %d\n", req.MaxRetries)
+	}
+
+	if err := admin.SendCommand(req); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
 func main() {
 	// Load .env file if present (no error if missing)
 	_ = godotenv.Load()
@@ -60,8 +115,12 @@ func main() {
 		case "pairingcode":
 			cmdPairingCode()
 			return
+		case "updateinference":
+			cmdUpdateInference(os.Args[2:])
+			return
 		default:
-			fmt.Fprintf(os.Stderr, "Unknown command: %s\nUsage: jotnar [pairingcode]\n", os.Args[1])
+			fmt.Fprintf(os.Stderr, "Unknown command: %s\n", os.Args[1])
+			fmt.Fprintf(os.Stderr, "Usage: jotnar [pairingcode|updateinference]\n")
 			os.Exit(1)
 		}
 	}
@@ -80,8 +139,11 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Inference client
-	infClient := inference.NewClient(inference.DefaultClientConfig())
+	// Inference client — wrapped in SwappableClient for hot-reload.
+	// WaitAndCreateClient blocks until the backend is reachable, then
+	// auto-detects the backend type by probing the server.
+	rawClient := inference.WaitAndCreateClient(inference.DefaultClientConfig())
+	infClient := inference.NewSwappableClient(rawClient)
 
 	// Core services
 	tokenService := auth.NewTokenService(database)
@@ -91,17 +153,17 @@ func main() {
 	deviceStore := store.NewDeviceStore(database)
 	journalStore := store.NewJournalStore(database)
 	metadataStore := store.NewMetadataStore(database)
+	pendingStore := store.NewPendingStore(database)
 
 	interpreter := processing.NewInterpreter(infClient, cfgManager, metadataStore)
-	inferenceWorkers := 1
-	if v := os.Getenv("INFERENCE_WORKERS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			inferenceWorkers = n
-		}
-	}
-	captureQueue := processing.NewQueue(interpreter, 200, inferenceWorkers)
+	captureQueue := processing.NewQueue(interpreter, 200, inference.DefaultWorkers())
 	consolidator := processing.NewConsolidator(infClient, cfgManager, metadataStore, journalStore)
 	reconsolidator := processing.NewReconsolidator(consolidator, cfgManager, metadataStore, journalStore)
+
+	// Restore any pending jobs from a previous shutdown.
+	if restored := captureQueue.Restore(pendingStore); restored > 0 {
+		log.Printf("Restored %d pending capture jobs from previous run", restored)
+	}
 
 	// First-time setup: generate pairing code + recovery key if no devices
 	hasPaired, err := pairingService.HasPairedDevices()
@@ -131,8 +193,22 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Background processing queue (interprets screenshots sequentially)
-	go captureQueue.Run(ctx)
+	// The queue gets its own context so we control its shutdown explicitly
+	// (pause workers → persist → then let it exit) rather than racing with ctx.
+	queueCtx, queueStop := context.WithCancel(context.Background())
+
+	// Admin socket — started early so `updateinference` works even while
+	// waiting for the inference server on first boot.
+	adminServer := admin.NewServer(infClient, captureQueue)
+	go func() {
+		if err := adminServer.ListenAndServe(ctx); err != nil {
+			log.Printf("Admin server error: %v", err)
+		}
+	}()
+
+	// Background processing queue (interprets screenshots concurrently)
+	go captureQueue.Run(queueCtx)
+	_ = queueStop // used in shutdown sequence below
 
 	// Background consolidation worker
 	go func() {
@@ -202,10 +278,24 @@ func main() {
 	<-ctx.Done()
 	log.Printf("Shutting down server...")
 
+	// 1. Stop accepting new HTTP requests (no new captures enqueued).
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		log.Printf("Server shutdown error: %v", err)
 	}
+
+	// 2. Pause workers — waits for in-flight interpretation to finish.
+	captureQueue.Pause()
+
+	// 3. Persist remaining buffered jobs so they survive the restart.
+	if saved := captureQueue.Persist(pendingStore); saved > 0 {
+		log.Printf("Persisted %d pending capture jobs for next startup", saved)
+	}
+
+	// 4. Let the queue goroutine exit cleanly.
+	queueStop()
+
 	log.Printf("Server stopped")
 }
+

@@ -78,38 +78,55 @@ func DefaultClientConfig() ClientConfig {
 	}
 }
 
-// NewClient creates the appropriate Client implementation.
-// Uses INFERENCE_BACKEND env var ("ollama" or "openai") if set,
-// otherwise auto-detects by probing the server.
-func NewClient(cfg ClientConfig) Client {
-	backend := strings.ToLower(os.Getenv("INFERENCE_BACKEND"))
-
-	if backend == "" {
-		backend = detectBackend(cfg.Host)
+// DefaultWorkers returns the INFERENCE_WORKERS value from the environment,
+// falling back to 1.
+func DefaultWorkers() int {
+	if v := os.Getenv("INFERENCE_WORKERS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
 	}
+	return 1
+}
+
+// WaitAndCreateClient blocks until the inference server is reachable, then
+// creates the appropriate client. Always auto-detects the backend type by
+// probing both Ollama and OpenAI health endpoints.
+func WaitAndCreateClient(cfg ClientConfig) Client {
+	log.Printf("Waiting for inference server at %s ...", cfg.Host)
+	backend := DetectBackend(cfg.Host)
+	log.Printf("Inference server at %s is ready (backend: %s)", cfg.Host, backend)
 
 	switch backend {
 	case "ollama":
-		log.Printf("[inference] using Ollama backend (%s)", cfg.Host)
 		return NewOllamaClient(cfg)
 	default:
-		log.Printf("[inference] using OpenAI-compatible backend (%s)", cfg.Host)
 		return NewOpenAIClient(cfg)
 	}
 }
 
-// detectBackend probes the server to determine its type.
-// If Ollama's /api/tags responds, it's Ollama; otherwise OpenAI-compatible.
-func detectBackend(host string) string {
-	client := &http.Client{Timeout: 5 * time.Second}
-	res, err := client.Get(host + "/api/tags")
-	if err == nil {
-		res.Body.Close()
-		if res.StatusCode == http.StatusOK {
-			return "ollama"
+// DetectBackend polls both Ollama and OpenAI endpoints until one
+// responds, and returns which backend type it found ("ollama" or "openai").
+func DetectBackend(host string) string {
+	c := &http.Client{Timeout: 5 * time.Second}
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+
+	// Check immediately, then on each tick.
+	for ; ; <-ticker.C {
+		if res, err := c.Get(host + "/api/tags"); err == nil {
+			res.Body.Close()
+			if res.StatusCode == http.StatusOK {
+				return "ollama"
+			}
+		}
+		if res, err := c.Get(host + "/v1/models"); err == nil {
+			res.Body.Close()
+			if res.StatusCode == http.StatusOK {
+				return "openai"
+			}
 		}
 	}
-	return "openai"
 }
 
 // isRetryable returns true for HTTP status codes that are likely transient.
