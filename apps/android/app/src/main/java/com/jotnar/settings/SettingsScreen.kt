@@ -490,12 +490,13 @@ private fun NumericFieldSetting(
     valueRange: IntRange
 ) {
     var textValue by remember(value) { mutableStateOf(value.toString()) }
+    var wasFocused by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
 
     fun commitValue() {
         val parsed = textValue.toIntOrNull()
         if (parsed != null && parsed in valueRange) {
-            onValueChange(parsed)
+            if (parsed != value) onValueChange(parsed)
         } else {
             textValue = value.toString()
         }
@@ -521,7 +522,14 @@ private fun NumericFieldSetting(
                 }),
                 modifier = Modifier
                     .width(100.dp)
-                    .onFocusChanged { if (!it.isFocused) commitValue() }
+                    .onFocusChanged {
+                        if (it.isFocused) {
+                            wasFocused = true
+                        } else if (wasFocused) {
+                            wasFocused = false
+                            commitValue()
+                        }
+                    }
             )
         }
     )

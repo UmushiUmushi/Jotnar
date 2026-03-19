@@ -179,9 +179,15 @@ fun EditEntryScreen(
 
     // Save confirmation dialog
     if (state.showSaveConfirmation) {
+        val excludedCount = state.toggleStates.count { !it.value }
         ConfirmationDialog(
             entryText = state.editedNarrative,
             title = "Save changes?",
+            description = if (excludedCount > 0) {
+                "$excludedCount disabled metadata ${if (excludedCount == 1) "entry" else "entries"} will be permanently deleted."
+            } else {
+                null
+            },
             confirmLabel = "Save",
             onConfirm = { viewModel.confirmSave() },
             onDismiss = { viewModel.dismissSaveConfirmation() }
@@ -235,10 +241,12 @@ private fun MetadataRow(
                             label = {
                                 Text(
                                     metadata.appName,
-                                    style = MaterialTheme.typography.labelSmall
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             },
-                            modifier = Modifier.height(24.dp)
+                            modifier = Modifier.height(24.dp).widthIn(max = 160.dp)
                         )
                     }
                     SuggestionChip(
@@ -246,7 +254,9 @@ private fun MetadataRow(
                         label = {
                             Text(
                                 metadata.category,
-                                style = MaterialTheme.typography.labelSmall
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         },
                         modifier = Modifier.height(24.dp)
