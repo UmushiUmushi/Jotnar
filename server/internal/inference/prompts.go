@@ -7,11 +7,11 @@ func InterpretationSystemPrompt(detail string) string {
 	detailInstruction := ""
 	switch detail {
 	case "minimal":
-		detailInstruction = "Provide only the app name and a very brief activity description (e.g., 'Using Discord')."
+		detailInstruction = "Provide only the app name and a very brief activity description (e.g., 'Using Discord'). Put all detail inside the \"interpretation\" string — do not add extra JSON fields."
 	case "detailed":
-		detailInstruction = "Provide the app name, key topics, names mentioned, and full context of what the user is doing."
+		detailInstruction = "In the \"interpretation\" field, include the app name, key topics, names of people mentioned, and full context of what the user is doing. Put ALL detail inside the \"interpretation\" string — do not add extra JSON fields."
 	default: // standard
-		detailInstruction = "Provide the app name and a summarized description of the activity."
+		detailInstruction = "Provide the app name and a summarized description of the activity. Put all detail inside the \"interpretation\" string — do not add extra JSON fields."
 	}
 
 	return fmt.Sprintf(`You are an AI that interprets screenshots from a user's device for their personal journal.
