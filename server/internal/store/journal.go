@@ -119,8 +119,9 @@ func (s *JournalStore) Delete(id string) error {
 	}
 	defer tx.Rollback()
 
-	// Unlink metadata first (ON DELETE SET NULL handles this via FK, but be explicit)
-	if _, err := tx.Exec("UPDATE metadata SET entry_id = NULL WHERE entry_id = ?", id); err != nil {
+	// Delete linked metadata — if the user wanted to keep some metadata and
+	// regenerate the entry, they would use reconsolidation instead.
+	if _, err := tx.Exec("DELETE FROM metadata WHERE entry_id = ?", id); err != nil {
 		return err
 	}
 	if _, err := tx.Exec("DELETE FROM journal_entries WHERE id = ?", id); err != nil {

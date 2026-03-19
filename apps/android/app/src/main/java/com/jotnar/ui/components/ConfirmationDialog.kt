@@ -23,6 +23,7 @@ import androidx.compose.ui.window.DialogProperties
 fun ConfirmationDialog(
     entryText: String,
     title: String,
+    description: String? = null,
     confirmLabel: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
@@ -93,6 +94,16 @@ fun ConfirmationDialog(
                             text = title,
                             style = MaterialTheme.typography.titleMedium
                         )
+
+                        if (description != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
 
                         Spacer(modifier = Modifier.height(20.dp))
 

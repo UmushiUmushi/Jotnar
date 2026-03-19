@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS metadata (
     entry_id        TEXT,
     created_at      DATETIME NOT NULL,
     FOREIGN KEY (device_id) REFERENCES devices(id),
-    FOREIGN KEY (entry_id) REFERENCES journal_entries(id) ON DELETE SET NULL
+    FOREIGN KEY (entry_id) REFERENCES journal_entries(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS recovery (

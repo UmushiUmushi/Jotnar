@@ -225,7 +225,7 @@ Edit a journal entry's narrative. Marks the entry as `edited: true`.
 
 ### DELETE /journal/{id}
 
-Delete a journal entry. Linked metadata rows are unlinked (not deleted).
+Delete a journal entry and all linked metadata rows.
 
 **Response** `200`
 

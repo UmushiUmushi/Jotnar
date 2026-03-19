@@ -232,6 +232,7 @@ fun JournalListScreen(
         ConfirmationDialog(
             entryText = state.deleteTargetEntry!!.narrative,
             title = "Delete this entry?",
+            description = "This will also delete associated metadata. To keep metadata and regenerate the entry, use the edit page instead.",
             confirmLabel = "Delete",
             onConfirm = { viewModel.confirmDeleteEntry() },
             onDismiss = { viewModel.dismissDeleteConfirmation() },
