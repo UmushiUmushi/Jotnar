@@ -9,7 +9,6 @@ import com.jotnar.network.models.MetadataResponse
 import com.jotnar.settings.TimezoneProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,6 +28,7 @@ data class EditEntryUiState(
     val error: String? = null,
     val saved: Boolean = false,
     val showSaveConfirmation: Boolean = false,
+    val showDiscardConfirmation: Boolean = false,
     val hasMetadataChanges: Boolean = false,
     val hasNarrativeChanges: Boolean = false,
     val zoneId: ZoneId = ZoneId.of("UTC")
@@ -47,7 +47,6 @@ class EditEntryViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(EditEntryUiState(zoneId = timezoneProvider.zoneId))
     val uiState: StateFlow<EditEntryUiState> = _uiState.asStateFlow()
 
-    private var debounceJob: Job? = null
     private var previewJob: Job? = null
 
     init {
@@ -122,76 +121,15 @@ class EditEntryViewModel @Inject constructor(
                 hasMetadataChanges = hasChanges
             )
         }
-
-        // Cancel pending preview and start new debounce
-        debounceJob?.cancel()
-        previewJob?.cancel()
-
-        debounceJob = viewModelScope.launch {
-            delay(1500)
-            requestPreview()
-        }
-    }
-
-    private fun requestPreview() {
-        val state = _uiState.value
-        val includedIds = state.toggleStates.filter { it.value }.keys.toList()
-
-        if (includedIds.size == state.metadata.size) {
-            // All included — revert to original narrative
-            _uiState.update {
-                it.copy(
-                    editedNarrative = it.entry?.narrative ?: "",
-                    hasNarrativeChanges = false,
-                    isRegenerating = false
-                )
-            }
-            return
-        }
-
-        if (includedIds.isEmpty()) {
-            _uiState.update {
-                it.copy(editedNarrative = "", hasNarrativeChanges = true, isRegenerating = false)
-            }
-            return
-        }
-
-        previewJob = viewModelScope.launch {
-            _uiState.update { it.copy(isRegenerating = true) }
-            when (val result = metadataRepository.previewReconsolidation(entryId, includedIds)) {
-                is ApiResult.Success -> {
-                    _uiState.update {
-                        it.copy(
-                            editedNarrative = result.data.narrative,
-                            hasNarrativeChanges = result.data.narrative != it.entry?.narrative,
-                            isRegenerating = false
-                        )
-                    }
-                }
-                is ApiResult.Error -> {
-                    _uiState.update {
-                        it.copy(isRegenerating = false, error = "Preview failed: ${result.message}")
-                    }
-                }
-                is ApiResult.NetworkError -> {
-                    _uiState.update {
-                        it.copy(isRegenerating = false, error = "Preview failed: network error")
-                    }
-                }
-            }
-        }
     }
 
     fun resetToggles() {
-        debounceJob?.cancel()
         previewJob?.cancel()
         _uiState.update { state ->
             state.copy(
                 toggleStates = state.metadata.associate { it.id to true },
-                editedNarrative = state.entry?.narrative ?: "",
                 isRegenerating = false,
-                hasMetadataChanges = false,
-                hasNarrativeChanges = false
+                hasMetadataChanges = false
             )
         }
     }
@@ -236,7 +174,6 @@ class EditEntryViewModel @Inject constructor(
     }
 
     fun regenerate() {
-        debounceJob?.cancel()
         previewJob?.cancel()
 
         val state = _uiState.value
@@ -273,6 +210,17 @@ class EditEntryViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    val hasUnsavedChanges: Boolean
+        get() = _uiState.value.hasNarrativeChanges || _uiState.value.hasMetadataChanges
+
+    fun requestDiscard() {
+        _uiState.update { it.copy(showDiscardConfirmation = true) }
+    }
+
+    fun dismissDiscardConfirmation() {
+        _uiState.update { it.copy(showDiscardConfirmation = false) }
     }
 
     fun clearError() {

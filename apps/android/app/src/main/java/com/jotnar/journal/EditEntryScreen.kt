@@ -1,5 +1,6 @@
 package com.jotnar.journal
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
@@ -8,9 +9,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,6 +35,10 @@ fun EditEntryScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
 
+    BackHandler(enabled = viewModel.hasUnsavedChanges) {
+        viewModel.requestDiscard()
+    }
+
     LaunchedEffect(state.saved) {
         if (state.saved) onNavigateBack(true)
     }
@@ -43,22 +48,17 @@ fun EditEntryScreen(
             TopAppBar(
                 title = { Text("Edit entry") },
                 navigationIcon = {
-                    IconButton(onClick = { onNavigateBack(false) }) {
+                    IconButton(onClick = {
+                        if (viewModel.hasUnsavedChanges) {
+                            viewModel.requestDiscard()
+                        } else {
+                            onNavigateBack(false)
+                        }
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
-                    if (state.hasMetadataChanges) {
-                        IconButton(onClick = { viewModel.resetToggles() }) {
-                            Icon(Icons.Default.Undo, contentDescription = "Reset toggles")
-                        }
-                    }
-                    IconButton(
-                        onClick = { viewModel.regenerate() },
-                        enabled = !state.isRegenerating && !state.isSaving
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Regenerate")
-                    }
                     IconButton(
                         onClick = { viewModel.requestSave() },
                         enabled = (state.hasNarrativeChanges || state.hasMetadataChanges) && !state.isSaving
@@ -138,15 +138,42 @@ fun EditEntryScreen(
                 }
             }
 
-            // Metadata section header
+            // Metadata section header with regen/reset actions
             if (state.metadata.isNotEmpty()) {
                 item {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    Text(
-                        text = "Metadata (${state.toggleStates.count { it.value }}/${state.metadata.size} included)",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Metadata (${state.toggleStates.count { it.value }}/${state.metadata.size} included)",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Row {
+                            if (state.hasMetadataChanges) {
+                                IconButton(
+                                    onClick = { viewModel.resetToggles() },
+                                    enabled = !state.isRegenerating
+                                ) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.Undo,
+                                        contentDescription = "Reset toggles"
+                                    )
+                                }
+                            }
+                            IconButton(
+                                onClick = { viewModel.regenerate() },
+                                enabled = !state.isRegenerating && !state.isSaving
+                            ) {
+                                Icon(
+                                    Icons.Default.Refresh,
+                                    contentDescription = "Regenerate"
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -157,6 +184,7 @@ fun EditEntryScreen(
                     metadata = meta,
                     zoneId = state.zoneId,
                     isIncluded = isIncluded,
+                    enabled = !state.isRegenerating,
                     onToggle = { viewModel.toggleMetadata(meta.id) }
                 )
             }
@@ -193,6 +221,22 @@ fun EditEntryScreen(
             onDismiss = { viewModel.dismissSaveConfirmation() }
         )
     }
+
+    // Discard confirmation dialog
+    if (state.showDiscardConfirmation) {
+        ConfirmationDialog(
+            entryText = state.editedNarrative,
+            title = "Discard changes?",
+            description = "You have unsaved changes that will be lost.",
+            confirmLabel = "Discard",
+            isDestructive = true,
+            onConfirm = {
+                viewModel.dismissDiscardConfirmation()
+                onNavigateBack(false)
+            },
+            onDismiss = { viewModel.dismissDiscardConfirmation() }
+        )
+    }
 }
 
 @Composable
@@ -200,6 +244,7 @@ private fun MetadataRow(
     metadata: MetadataResponse,
     zoneId: ZoneId,
     isIncluded: Boolean,
+    enabled: Boolean = true,
     onToggle: () -> Unit
 ) {
     val backgroundColor by animateColorAsState(
@@ -211,7 +256,7 @@ private fun MetadataRow(
         label = "metadata_bg"
     )
 
-    val contentAlpha = if (isIncluded) 1f else 0.4f
+    val contentAlpha = if (!enabled) 0.38f else if (isIncluded) 1f else 0.4f
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -279,6 +324,7 @@ private fun MetadataRow(
             Switch(
                 checked = isIncluded,
                 onCheckedChange = { onToggle() },
+                enabled = enabled,
                 modifier = Modifier.padding(start = 8.dp)
             )
         }
