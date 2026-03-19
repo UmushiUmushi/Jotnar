@@ -7,8 +7,23 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
+
+// debugLog controls whether raw inference responses are logged.
+// Off by default; toggled at runtime via the `debuglog` subcommand.
+var debugLog atomic.Bool
+
+// SetDebugLog enables or disables inference debug logging.
+func SetDebugLog(on bool) {
+	debugLog.Store(on)
+}
+
+// DebugLog returns the current state of inference debug logging.
+func DebugLog() bool {
+	return debugLog.Load()
+}
 
 // Client is the interface for all inference backends.
 // Any server that can take a chat completion request and return text

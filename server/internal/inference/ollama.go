@@ -141,7 +141,9 @@ func (c *OllamaClient) Complete(req ChatRequest) (string, error) {
 			return "", fmt.Errorf("decode ollama response: %w", err)
 		}
 
-		log.Printf("[inference] ollama raw response: %s", string(respBody))
+		if DebugLog() {
+			log.Printf("[inference] ollama raw response: %s", string(respBody))
+		}
 
 		content := stripThinking(ollamaResp.Message.Content)
 		if content == "" {

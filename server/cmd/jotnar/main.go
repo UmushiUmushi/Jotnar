@@ -52,6 +52,14 @@ func cmdPairingCode() {
 	fmt.Println("============================================")
 }
 
+func cmdDebugLog() {
+	req := admin.Request{Action: "toggle_debug_log"}
+	if err := admin.SendCommand(req); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
 func cmdUpdateInference(args []string) {
 	fs := flag.NewFlagSet("updateinference", flag.ExitOnError)
 	host := fs.String("host", "", "Inference server URL")
@@ -118,9 +126,12 @@ func main() {
 		case "updateinference":
 			cmdUpdateInference(os.Args[2:])
 			return
+		case "debuglog":
+			cmdDebugLog()
+			return
 		default:
 			fmt.Fprintf(os.Stderr, "Unknown command: %s\n", os.Args[1])
-			fmt.Fprintf(os.Stderr, "Usage: jotnar [pairingcode|updateinference]\n")
+			fmt.Fprintf(os.Stderr, "Usage: jotnar [pairingcode|updateinference|debuglog]\n")
 			os.Exit(1)
 		}
 	}

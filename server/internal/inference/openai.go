@@ -134,7 +134,9 @@ func (c *OpenAIClient) Complete(req ChatRequest) (string, error) {
 			return "", fmt.Errorf("no choices in response")
 		}
 
-		log.Printf("[inference] raw response: %s", string(respBody))
+		if DebugLog() {
+			log.Printf("[inference] raw response: %s", string(respBody))
+		}
 
 		content := stripThinking(chatResp.Choices[0].Message.Content)
 		if content == "" {

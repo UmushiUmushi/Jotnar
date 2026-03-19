@@ -17,6 +17,7 @@ RUN chmod +x /entrypoint.sh
 # Aliases so `docker exec jotnar updateinference` works (without repeating "jotnar").
 RUN printf '#!/bin/sh\nexec jotnar updateinference "$@"\n' > /usr/local/bin/updateinference && chmod +x /usr/local/bin/updateinference
 RUN printf '#!/bin/sh\nexec jotnar pairingcode "$@"\n' > /usr/local/bin/pairingcode && chmod +x /usr/local/bin/pairingcode
+RUN printf '#!/bin/sh\nexec jotnar debuglog "$@"\n' > /usr/local/bin/debuglog && chmod +x /usr/local/bin/debuglog
 
 EXPOSE 8910
 VOLUME /data

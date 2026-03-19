@@ -113,6 +113,8 @@ func (s *Server) handle(conn net.Conn) {
 	switch req.Action {
 	case "update_inference":
 		s.handleUpdateInference(conn, req)
+	case "toggle_debug_log":
+		s.handleToggleDebugLog(conn)
 	default:
 		writeResponse(conn, Response{OK: false, Message: "unknown action: " + req.Action})
 	}
@@ -186,6 +188,18 @@ func (s *Server) handleUpdateInference(conn net.Conn, req Request) {
 		log.Printf("[admin] %s", msg)
 		writeResponse(conn, Response{OK: false, Message: msg})
 	}
+}
+
+func (s *Server) handleToggleDebugLog(conn net.Conn) {
+	was := inference.DebugLog()
+	inference.SetDebugLog(!was)
+	state := "off"
+	if !was {
+		state = "on"
+	}
+	msg := fmt.Sprintf("Inference debug logging toggled %s", state)
+	log.Printf("[admin] %s", msg)
+	writeResponse(conn, Response{OK: true, Message: msg})
 }
 
 func writeResponse(conn net.Conn, resp Response) {

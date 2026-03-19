@@ -304,3 +304,13 @@ docker exec jotnar updateinference
 ```bash
 docker exec jotnar updateinference --workers=8
 ```
+
+## Debug Logging
+
+Inference debug logging is off by default. When enabled, it logs the raw response body from the inference backend for every request. Toggle it on or off at runtime:
+
+```bash
+docker exec jotnar debuglog
+```
+
+Each call flips the state (off → on, on → off). The toggle resets when the container restarts.
