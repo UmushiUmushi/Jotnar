@@ -114,6 +114,7 @@ Upload a single screenshot for interpretation. The screenshot is interpreted by 
 |-------|------|----------|-------------|
 | `screenshot` | file | yes | PNG or JPEG, max 10 MB |
 | `captured_at` | string | no | RFC 3339 timestamp. Defaults to server time. |
+| `app_name` | string | no | Foreground app name reported by the client device. When provided, the server uses this instead of inferring from the screenshot. |
 
 **Response** `200`
 
@@ -138,6 +139,7 @@ Upload up to 50 screenshots in a single request. Processed concurrently (4 at a 
 |-------|------|----------|-------------|
 | `screenshots` | file[] | yes | PNG or JPEG files, max 10 MB each, max 50 |
 | `captured_at` | string[] | no | RFC 3339 timestamps, index-matched to files |
+| `app_name` | string[] | no | Foreground app names, index-matched to files |
 
 **Response** `200` (all succeeded), `207` (partial), `500` (all failed)
 

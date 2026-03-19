@@ -44,5 +44,6 @@ type PendingCapture struct {
 	DeviceID   string    `json:"device_id"`
 	ImageData  []byte    `json:"-"`
 	CapturedAt time.Time `json:"captured_at"`
+	AppName    string    `json:"app_name"` // Foreground app name reported by the client device.
 	CreatedAt  time.Time `json:"created_at"`
 }

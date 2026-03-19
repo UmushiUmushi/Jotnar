@@ -20,15 +20,15 @@ func (s *PendingStore) SaveAll(jobs []PendingCapture) error {
 	defer tx.Rollback()
 
 	stmt, err := tx.Prepare(
-		`INSERT OR REPLACE INTO pending_captures (id, device_id, image_data, captured_at, created_at)
-		 VALUES (?, ?, ?, ?, ?)`)
+		`INSERT OR REPLACE INTO pending_captures (id, device_id, image_data, captured_at, app_name, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
 	for _, j := range jobs {
-		if _, err := stmt.Exec(j.ID, j.DeviceID, j.ImageData, j.CapturedAt.UTC(), j.CreatedAt.UTC()); err != nil {
+		if _, err := stmt.Exec(j.ID, j.DeviceID, j.ImageData, j.CapturedAt.UTC(), j.AppName, j.CreatedAt.UTC()); err != nil {
 			return err
 		}
 	}
@@ -39,7 +39,7 @@ func (s *PendingStore) SaveAll(jobs []PendingCapture) error {
 // LoadAll retrieves all pending captures and deletes them in one transaction.
 func (s *PendingStore) LoadAll() ([]PendingCapture, error) {
 	rows, err := s.DB.Query(
-		`SELECT id, device_id, image_data, captured_at, created_at
+		`SELECT id, device_id, image_data, captured_at, COALESCE(app_name, ''), created_at
 		 FROM pending_captures ORDER BY created_at ASC`)
 	if err != nil {
 		return nil, err
@@ -49,7 +49,7 @@ func (s *PendingStore) LoadAll() ([]PendingCapture, error) {
 	var jobs []PendingCapture
 	for rows.Next() {
 		var j PendingCapture
-		if err := rows.Scan(&j.ID, &j.DeviceID, &j.ImageData, &j.CapturedAt, &j.CreatedAt); err != nil {
+		if err := rows.Scan(&j.ID, &j.DeviceID, &j.ImageData, &j.CapturedAt, &j.AppName, &j.CreatedAt); err != nil {
 			return nil, err
 		}
 		jobs = append(jobs, j)

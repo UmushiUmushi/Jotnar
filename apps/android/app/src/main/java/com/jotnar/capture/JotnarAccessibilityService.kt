@@ -49,6 +49,10 @@ class JotnarAccessibilityService : AccessibilityService() {
 
         private val _currentForegroundApp = MutableStateFlow<String?>(null)
         val currentForegroundApp: StateFlow<String?> = _currentForegroundApp.asStateFlow()
+
+        // Package name tracked separately for blocklist checks.
+        private val _currentForegroundPackage = MutableStateFlow<String?>(null)
+        val currentForegroundPackage: StateFlow<String?> = _currentForegroundPackage.asStateFlow()
     }
 
     private var foregroundAppObserverJob: Job? = null
@@ -85,12 +89,12 @@ class JotnarAccessibilityService : AccessibilityService() {
 
         // Watch foreground app changes to update notification immediately
         foregroundAppObserverJob = serviceScope.launch {
-            _currentForegroundApp.collect { foregroundApp ->
+            _currentForegroundPackage.collect { foregroundPackage ->
                 val currentState = _captureState.value
                 // Only react if we're in an active capture state (not stopped/idle/manually paused)
                 if (currentState != CaptureState.Capturing && currentState != CaptureState.PausedBlockedApp) return@collect
 
-                val isBlocked = foregroundApp != null && appBlocklist.isBlocked(foregroundApp)
+                val isBlocked = foregroundPackage != null && appBlocklist.isBlocked(foregroundPackage)
                 val newState = if (isBlocked) CaptureState.PausedBlockedApp else CaptureState.Capturing
                 if (currentState != newState) {
                     _captureState.value = newState
@@ -107,7 +111,38 @@ class JotnarAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            _currentForegroundApp.value = event.packageName?.toString()
+            val pkg = event.packageName?.toString() ?: return
+            if (isOverlayPackage(pkg)) return
+            _currentForegroundPackage.value = pkg
+            _currentForegroundApp.value = resolveAppLabel(pkg)
+        }
+    }
+
+    /**
+     * Returns true for packages that are overlays (keyboards, system UI, etc.)
+     * rather than actual foreground apps the user is interacting with.
+     */
+    private fun isOverlayPackage(packageName: String): Boolean {
+        // Input methods (keyboards)
+        if (packageName.contains("inputmethod") || packageName.contains("keyboard")) return true
+        // System UI components
+        if (packageName == "com.android.systemui") return true
+        // Permission/chooser dialogs
+        if (packageName == "com.android.permissioncontroller") return true
+        if (packageName == "android") return true
+        return false
+    }
+
+    /**
+     * Resolves a package name to a human-readable app label.
+     * Falls back to the package name if resolution fails.
+     */
+    private fun resolveAppLabel(packageName: String): String {
+        return try {
+            val appInfo = packageManager.getApplicationInfo(packageName, 0)
+            packageManager.getApplicationLabel(appInfo).toString()
+        } catch (_: Exception) {
+            packageName
         }
     }
 
@@ -126,6 +161,8 @@ class JotnarAccessibilityService : AccessibilityService() {
         instance = null
         _isServiceEnabled.value = false
         _captureState.value = CaptureState.Idle
+        _currentForegroundApp.value = null
+        _currentForegroundPackage.value = null
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -165,7 +202,8 @@ class JotnarAccessibilityService : AccessibilityService() {
                         bitmap.recycle()
                         val jpeg = compressToJpeg(scaled)
                         scaled.recycle()
-                        uploadRepository.enqueue(jpeg, Instant.now())
+                        val foregroundApp = _currentForegroundApp.value ?: ""
+                        uploadRepository.enqueue(jpeg, Instant.now(), foregroundApp)
 
                         val queueSize = uploadRepository.queueSizeSync()
                         if (queueSize >= devicePreferences.uploadBatchSize) {
@@ -248,8 +286,8 @@ class JotnarAccessibilityService : AccessibilityService() {
             }
         }
 
-        val foregroundApp = _currentForegroundApp.value
-        if (foregroundApp != null && appBlocklist.isBlocked(foregroundApp)) {
+        val foregroundPackage = _currentForegroundPackage.value
+        if (foregroundPackage != null && appBlocklist.isBlocked(foregroundPackage)) {
             return CaptureState.PausedBlockedApp
         }
 

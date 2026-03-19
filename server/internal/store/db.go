@@ -26,6 +26,20 @@ func InitializeSchema(db *sql.DB) error {
 			return err
 		}
 	}
+
+	if err := runMigrations(db); err != nil {
+		return fmt.Errorf("run migrations: %w", err)
+	}
+
+	return nil
+}
+
+// runMigrations applies additive schema changes for existing databases.
+// Each migration is idempotent — safe to run multiple times.
+func runMigrations(db *sql.DB) error {
+	// Add app_name column to pending_captures for client-reported foreground app.
+	db.Exec(`ALTER TABLE pending_captures ADD COLUMN app_name TEXT DEFAULT ''`)
+
 	return nil
 }
 

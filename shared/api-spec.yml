@@ -130,6 +130,9 @@ paths:
                   type: string
                   format: date-time
                   description: When the screenshot was taken (RFC 3339). Defaults to server time.
+                app_name:
+                  type: string
+                  description: Foreground app name reported by the client device. When provided, the server uses this instead of inferring from the screenshot.
       responses:
         "200":
           description: Screenshot interpreted successfully
@@ -187,6 +190,11 @@ paths:
                     type: string
                     format: date-time
                   description: Timestamps for each screenshot (RFC 3339). Index-matched to screenshots.
+                app_name:
+                  type: array
+                  items:
+                    type: string
+                  description: Foreground app names reported by the client device. Index-matched to screenshots.
       responses:
         "200":
           description: All screenshots interpreted successfully

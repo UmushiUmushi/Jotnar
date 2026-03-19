@@ -49,5 +49,6 @@ CREATE TABLE IF NOT EXISTS pending_captures (
     device_id   TEXT NOT NULL,
     image_data  BLOB NOT NULL,
     captured_at DATETIME NOT NULL,
+    app_name    TEXT DEFAULT '',
     created_at  DATETIME NOT NULL
 );

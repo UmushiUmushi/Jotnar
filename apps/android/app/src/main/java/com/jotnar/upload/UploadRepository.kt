@@ -26,13 +26,14 @@ class UploadRepository @Inject constructor(
     private val api: JotnarApi,
     private val devicePreferences: DevicePreferences
 ) {
-    suspend fun enqueue(imageData: ByteArray, capturedAt: Instant) {
+    suspend fun enqueue(imageData: ByteArray, capturedAt: Instant, appName: String = "") {
         val screenshot = PendingScreenshot(
             id = UUID.randomUUID().toString(),
             imageData = imageData,
             capturedAt = capturedAt.toEpochMilli(),
             createdAt = System.currentTimeMillis(),
-            fileSize = imageData.size
+            fileSize = imageData.size,
+            appName = appName
         )
         uploadDao.insert(screenshot)
     }
@@ -73,8 +74,9 @@ class UploadRepository @Inject constructor(
             .atOffset(ZoneOffset.UTC)
             .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
             .toRequestBody("text/plain".toMediaType())
+        val appName = screenshot.appName.toRequestBody("text/plain".toMediaType())
 
-        val response = api.capture(part, timestamp)
+        val response = api.capture(part, timestamp, appName)
         return if (response.isSuccessful) {
             uploadDao.deleteById(screenshot.id)
             val remaining = uploadDao.count()
@@ -104,7 +106,11 @@ class UploadRepository @Inject constructor(
                 .toRequestBody("text/plain".toMediaType())
         }
 
-        val response = api.batchCapture(parts, timestamps)
+        val appNames = batch.map { screenshot ->
+            screenshot.appName.toRequestBody("text/plain".toMediaType())
+        }
+
+        val response = api.batchCapture(parts, timestamps, appNames)
         val body = response.body()
 
         if (!response.isSuccessful) {

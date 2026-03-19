@@ -30,14 +30,16 @@ interface JotnarApi {
     @POST("capture")
     suspend fun capture(
         @Part screenshot: MultipartBody.Part,
-        @Part("captured_at") capturedAt: RequestBody? = null
+        @Part("captured_at") capturedAt: RequestBody? = null,
+        @Part("app_name") appName: RequestBody? = null
     ): Response<CaptureResponse>
 
     @Multipart
     @POST("capture/batch")
     suspend fun batchCapture(
         @Part screenshots: List<MultipartBody.Part>,
-        @Part("captured_at") capturedAt: @JvmSuppressWildcards List<RequestBody>? = null
+        @Part("captured_at") capturedAt: @JvmSuppressWildcards List<RequestBody>? = null,
+        @Part("app_name") appName: @JvmSuppressWildcards List<RequestBody>? = null
     ): Response<BatchCaptureResponse>
 
     // Journal

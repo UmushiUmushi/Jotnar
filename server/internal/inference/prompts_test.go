@@ -6,28 +6,28 @@ import (
 )
 
 func TestInterpretationSystemPrompt_Minimal(t *testing.T) {
-	prompt := InterpretationSystemPrompt("minimal")
+	prompt := InterpretationSystemPrompt("minimal", "")
 	if !strings.Contains(prompt, "very brief") {
 		t.Error("minimal prompt should contain 'very brief'")
 	}
 }
 
 func TestInterpretationSystemPrompt_Standard(t *testing.T) {
-	prompt := InterpretationSystemPrompt("standard")
+	prompt := InterpretationSystemPrompt("standard", "")
 	if !strings.Contains(prompt, "summarized") {
 		t.Error("standard prompt should contain 'summarized'")
 	}
 }
 
 func TestInterpretationSystemPrompt_Detailed(t *testing.T) {
-	prompt := InterpretationSystemPrompt("detailed")
+	prompt := InterpretationSystemPrompt("detailed", "")
 	if !strings.Contains(prompt, "key topics") {
 		t.Error("detailed prompt should contain 'key topics'")
 	}
 }
 
 func TestInterpretationSystemPrompt_UnknownDefaultsToStandard(t *testing.T) {
-	prompt := InterpretationSystemPrompt("unknown_value")
+	prompt := InterpretationSystemPrompt("unknown_value", "")
 	if !strings.Contains(prompt, "summarized") {
 		t.Error("unknown detail level should default to standard (contain 'summarized')")
 	}

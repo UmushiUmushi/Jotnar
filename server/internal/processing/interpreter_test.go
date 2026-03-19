@@ -53,7 +53,7 @@ func TestInterpret_Success(t *testing.T) {
 	// Minimal valid PNG (magic bytes + minimal data).
 	imageData := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00}
 
-	meta, err := interp.Interpret(imageData, deviceID, capturedAt)
+	meta, err := interp.Interpret(imageData, deviceID, capturedAt, "")
 	if err != nil {
 		t.Fatalf("Interpret: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestInterpret_InferenceError(t *testing.T) {
 	deviceID := insertTestDevice(t, db)
 
 	interp := NewInterpreter(client, cfg, metaStore)
-	_, err := interp.Interpret([]byte{0x89, 0x50, 0x4E, 0x47}, deviceID, time.Now())
+	_, err := interp.Interpret([]byte{0x89, 0x50, 0x4E, 0x47}, deviceID, time.Now(), "")
 	if err == nil {
 		t.Fatal("expected error from inference failure, got nil")
 	}
@@ -124,7 +124,7 @@ func TestInterpret_ParseError(t *testing.T) {
 	deviceID := insertTestDevice(t, db)
 
 	interp := NewInterpreter(client, cfg, metaStore)
-	_, err := interp.Interpret([]byte{0x89, 0x50, 0x4E, 0x47}, deviceID, time.Now())
+	_, err := interp.Interpret([]byte{0x89, 0x50, 0x4E, 0x47}, deviceID, time.Now(), "")
 	if err == nil {
 		t.Fatal("expected error from parse failure, got nil")
 	}
@@ -174,7 +174,7 @@ func TestInterpret_UsesConfigDetail(t *testing.T) {
 	deviceID := insertTestDevice(t, db)
 
 	interp := NewInterpreter(client, cfgMgr, metaStore)
-	interp.Interpret([]byte{0x89, 0x50, 0x4E, 0x47}, deviceID, time.Now())
+	interp.Interpret([]byte{0x89, 0x50, 0x4E, 0x47}, deviceID, time.Now(), "")
 
 	// Verify the request contained the detailed prompt keywords.
 	if !strings.Contains(string(receivedBody), "key topics") {

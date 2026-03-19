@@ -22,6 +22,7 @@ type CaptureJob struct {
 	ImageData  []byte
 	DeviceID   string
 	CapturedAt time.Time
+	AppName    string // Optional: foreground app name reported by the client device.
 }
 
 // Queue accepts capture jobs and processes them in the background.
@@ -163,6 +164,7 @@ func (q *Queue) Persist(pendingStore *store.PendingStore) int {
 			DeviceID:   j.DeviceID,
 			ImageData:  j.ImageData,
 			CapturedAt: j.CapturedAt,
+			AppName:    j.AppName,
 			CreatedAt:  time.Now().UTC(),
 		}
 	}
@@ -189,6 +191,7 @@ func (q *Queue) Restore(pendingStore *store.PendingStore) int {
 			ImageData:  j.ImageData,
 			DeviceID:   j.DeviceID,
 			CapturedAt: j.CapturedAt,
+			AppName:    j.AppName,
 		}) {
 			restored++
 		}
@@ -221,7 +224,7 @@ func (q *Queue) runWorker(ctx context.Context, id int) {
 		case <-ctx.Done():
 			return
 		case job := <-q.jobs:
-			meta, err := q.interpreter.Interpret(job.ImageData, job.DeviceID, job.CapturedAt)
+			meta, err := q.interpreter.Interpret(job.ImageData, job.DeviceID, job.CapturedAt, job.AppName)
 			if err != nil {
 				log.Printf("Queue[%d]: interpretation failed for device %s (image size: %d bytes): %v", id, job.DeviceID, len(job.ImageData), err)
 				continue

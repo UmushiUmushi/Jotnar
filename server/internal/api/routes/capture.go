@@ -85,10 +85,13 @@ func (h *CaptureHandler) Capture(c *gin.Context) {
 		capturedAt = time.Now().UTC()
 	}
 
+	appName := c.PostForm("app_name")
+
 	if !h.queue.Enqueue(processing.CaptureJob{
 		ImageData:  imageData,
 		DeviceID:   deviceID.(string),
 		CapturedAt: capturedAt,
+		AppName:    appName,
 	}) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "processing queue is full"})
 		return
@@ -109,6 +112,7 @@ func (h *CaptureHandler) BatchCapture(c *gin.Context) {
 	form := c.Request.MultipartForm
 	files := form.File["screenshots"]
 	timestamps := form.Value["captured_at"]
+	appNames := form.Value["app_name"]
 
 	if len(files) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no screenshots provided"})
@@ -134,6 +138,11 @@ func (h *CaptureHandler) BatchCapture(c *gin.Context) {
 			capturedAt = time.Now().UTC()
 		}
 
+		var appName string
+		if i < len(appNames) {
+			appName = appNames[i]
+		}
+
 		imageData, err := readFileHeader(fh)
 		if err != nil {
 			rejected++
@@ -145,6 +154,7 @@ func (h *CaptureHandler) BatchCapture(c *gin.Context) {
 			ImageData:  imageData,
 			DeviceID:   deviceID.(string),
 			CapturedAt: capturedAt,
+			AppName:    appName,
 		}) {
 			rejected++
 			rejectedResults = append(rejectedResults, BatchCaptureResult{Index: i, Error: "processing queue is full"})

@@ -34,19 +34,28 @@ func NewInterpreter(client inference.Client, cfg *config.Manager, metadata *stor
 }
 
 // Interpret processes a screenshot and returns the resulting metadata.
-func (i *Interpreter) Interpret(imageData []byte, deviceID string, capturedAt time.Time) (*store.Metadata, error) {
+// If appName is non-empty, the client has reported the foreground app and the
+// model is told the app name upfront instead of guessing from the screenshot.
+func (i *Interpreter) Interpret(imageData []byte, deviceID string, capturedAt time.Time, appName string) (*store.Metadata, error) {
 	cfg := i.config.Get()
 
 	imageData = downscaleImage(imageData)
 
 	b64Image := base64.StdEncoding.EncodeToString(imageData)
 
+	systemPrompt := inference.InterpretationSystemPrompt(cfg.InterpretationDetail, appName)
+
+	userText := fmt.Sprintf("Device: %s, Captured at: %s", deviceID, capturedAt.In(cfg.Location()).Format(time.RFC3339))
+	if appName != "" {
+		userText += fmt.Sprintf(", App: %s", appName)
+	}
+
 	req := inference.ChatRequest{
 		Messages: []inference.Message{
-			{Role: "system", Content: inference.InterpretationSystemPrompt(cfg.InterpretationDetail)},
+			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: []map[string]any{
 				{"type": "image_url", "image_url": map[string]string{"url": "data:image/png;base64," + b64Image}},
-				{"type": "text", "text": fmt.Sprintf("Device: %s, Captured at: %s", deviceID, capturedAt.In(cfg.Location()).Format(time.RFC3339))},
+				{"type": "text", "text": userText},
 			}},
 		},
 		Temperature: 0.3,
@@ -63,13 +72,19 @@ func (i *Interpreter) Interpret(imageData []byte, deviceID string, capturedAt ti
 		return nil, fmt.Errorf("parse interpretation: %w", err)
 	}
 
+	// Prefer the client-reported app name over the model's guess.
+	resolvedAppName := result.AppName
+	if appName != "" {
+		resolvedAppName = appName
+	}
+
 	meta := store.Metadata{
 		ID:             uuid.New().String(),
 		DeviceID:       deviceID,
 		CapturedAt:     capturedAt,
 		Interpretation: result.Interpretation,
 		Category:       result.Category,
-		AppName:        result.AppName,
+		AppName:        resolvedAppName,
 		CreatedAt:      time.Now().UTC(),
 	}
 

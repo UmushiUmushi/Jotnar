@@ -3,7 +3,10 @@ package inference
 
 import "fmt"
 
-func InterpretationSystemPrompt(detail string) string {
+// InterpretationSystemPrompt builds the system prompt for Stage 1 inference.
+// When appName is non-empty the model is told the app name upfront so it can
+// focus on describing the activity rather than guessing the application.
+func InterpretationSystemPrompt(detail string, appName string) string {
 	detailInstruction := ""
 	switch detail {
 	case "minimal":
@@ -14,15 +17,20 @@ func InterpretationSystemPrompt(detail string) string {
 		detailInstruction = "Provide the app name and a summarized description of the activity. Put all detail inside the \"interpretation\" string — do not add extra JSON fields."
 	}
 
+	appNameInstruction := `- "app_name": the name of the application visible in the screenshot`
+	if appName != "" {
+		appNameInstruction = fmt.Sprintf(`- "app_name": the device reports the foreground app is "%s" — use this value`, appName)
+	}
+
 	return fmt.Sprintf(`You are an AI that interprets screenshots from a user's device for their personal journal.
 Analyze the screenshot and return a JSON object with these fields:
 - "interpretation": a natural language description of what the user is doing
 - "category": one of: gaming, social, browsing, coding, productivity, media, communication, other
-- "app_name": the name of the application visible in the screenshot
+%s
 
 %s
 
-Return ONLY valid JSON, no markdown fences or extra text.`, detailInstruction)
+Return ONLY valid JSON, no markdown fences or extra text.`, appNameInstruction, detailInstruction)
 }
 
 func ConsolidationSystemPrompt(tone string) string {
